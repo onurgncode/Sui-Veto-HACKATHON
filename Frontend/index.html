@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="tr" class="dark-theme" style="color-scheme: dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Merkeziyetsiz Community - 42 Kocaeli Hackathon</title>
+
+    <style>
+      /*
+  Josh's Custom CSS Reset
+  https://www.joshwcomeau.com/css/custom-css-reset/
+*/
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      * {
+        margin: 0;
+      }
+      body {
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+      }
+      img,
+      picture,
+      video,
+      canvas,
+      svg {
+        display: block;
+        max-width: 100%;
+      }
+      input,
+      button,
+      textarea,
+      select {
+        font: inherit;
+      }
+      p,
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6 {
+        overflow-wrap: break-word;
+      }
+      #root,
+      #__next {
+        isolation: isolate;
+      }
+
+      /* Hide Sui dapp-kit modals completely */
+      [data-radix-portal],
+      [data-testid="wallet-kit-dialog"],
+      [data-testid="wallet-kit-connect-modal"],
+      [data-testid="wallet-kit-account-modal"],
+      div[role="dialog"][aria-modal="true"]:has([data-testid*="wallet"]),
+      .wallet-kit-overlay,
+      [class*="wallet-kit"],
+      [class*="WalletKit"] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        position: fixed !important;
+        top: -9999px !important;
+        left: -9999px !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
