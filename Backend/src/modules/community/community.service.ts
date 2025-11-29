@@ -91,7 +91,8 @@ export class CommunityService {
       // Check if address exists as dynamic field
       const memberField = await this.objectFetcher.getDynamicField(
         communityObject.objectId,
-        address
+        address,
+        'address'
       );
 
       return memberField !== null;
@@ -135,6 +136,44 @@ export class CommunityService {
       };
     } catch (error) {
       logger.error('Error creating join transaction:', error);
+      throw error;
+    }
+  }
+
+  async getAllCommunities(): Promise<Community[]> {
+    try {
+      logger.info('Fetching all communities');
+
+      const communityObjects = await this.objectFetcher.getAllCommunities();
+
+      const communities: Community[] = communityObjects.map((obj) => ({
+        id: obj.objectId,
+        name: (obj.data.name as string) || '',
+      }));
+
+      logger.info(`Found ${communities.length} communities`);
+      return communities;
+    } catch (error) {
+      logger.error('Error getting all communities:', error);
+      throw error;
+    }
+  }
+
+  async getCommunitiesByMember(address: string): Promise<Community[]> {
+    try {
+      logger.info(`Fetching communities for member: ${address}`);
+
+      const communityObjects = await this.objectFetcher.getCommunitiesByMember(address);
+
+      const communities: Community[] = communityObjects.map((obj) => ({
+        id: obj.objectId,
+        name: (obj.data.name as string) || '',
+      }));
+
+      logger.info(`Found ${communities.length} communities for member ${address}`);
+      return communities;
+    } catch (error) {
+      logger.error('Error getting communities by member:', error);
       throw error;
     }
   }

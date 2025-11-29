@@ -53,6 +53,7 @@ app.get('/api', (_req, res) => {
       proposal: '/api/proposal',
       notification: '/api/notification',
       storage: '/api/storage',
+      eventNFT: '/api/event-nft',
     },
   });
 });

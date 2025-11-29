@@ -26,6 +26,13 @@ const { networkConfig, useNetworkVariable, useNetworkVariables } =
         counterPackageId: MAINNET_COUNTER_PACKAGE_ID,
       },
     },
+    // Enoki network - testnet için Enoki desteği
+    'enoki-testnet': {
+      url: getFullnodeUrl("testnet"),
+      variables: {
+        counterPackageId: TESTNET_COUNTER_PACKAGE_ID,
+      },
+    },
   });
 
 export { useNetworkVariable, useNetworkVariables, networkConfig };

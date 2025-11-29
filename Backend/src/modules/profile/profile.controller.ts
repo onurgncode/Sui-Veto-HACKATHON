@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ProfileService } from './profile.service';
 import { ApiResponse } from '../../types';
+import { logger } from '../../utils/logger';
 
 export class ProfileController {
   private profileService: ProfileService;
@@ -37,9 +38,12 @@ export class ProfileController {
 
       res.json({
         success: true,
-        data: profile,
+        data: {
+          profile,
+        },
       } as ApiResponse);
     } catch (error) {
+      logger.error('ProfileController.getProfile error:', error);
       next(error);
     }
   };
@@ -114,6 +118,59 @@ export class ProfileController {
         message: 'Profile creation transaction created',
       } as ApiResponse);
     } catch (error) {
+      next(error);
+    }
+  };
+
+  debugProfile = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { address } = req.params;
+
+      if (!address) {
+        res.status(400).json({
+          success: false,
+          error: 'Address parameter is required',
+        } as ApiResponse);
+        return;
+      }
+
+      // Direct SuiObjectFetcher kullanarak debug bilgisi al
+      const { SuiObjectFetcher } = await import('../../services/suiObjectFetcher');
+      const objectFetcher = new SuiObjectFetcher();
+
+      // Tüm owned objects'leri al
+      const allObjects = await objectFetcher.getOwnedObjects(address);
+      
+      // Profile type ile filter
+      const { PACKAGE_ID } = await import('../../config/sui');
+      const profileType = `${PACKAGE_ID}::profile::Profile`;
+      const profileObjects = await objectFetcher.getOwnedObjects(address, profileType);
+
+      res.json({
+        success: true,
+        data: {
+          address,
+          profileType,
+          packageId: PACKAGE_ID,
+          totalObjects: allObjects.length,
+          profileObjectsCount: profileObjects.length,
+          allObjectTypes: allObjects.map((o) => o.type),
+          profileObjectTypes: profileObjects.map((o) => o.type),
+          profileObjectsDetails: profileObjects.map((o) => ({
+            objectId: o.objectId,
+            type: o.type,
+            hasNickname: !!o.data.nickname,
+            nickname: o.data.nickname,
+            owner: o.data.owner,
+          })),
+        },
+      } as ApiResponse);
+    } catch (error) {
+      logger.error('ProfileController.debugProfile error:', error);
       next(error);
     }
   };

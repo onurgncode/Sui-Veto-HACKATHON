@@ -13,5 +13,8 @@ router.get('/:address/stats', profileController.getMemberStats);
 // POST /api/profile
 router.post('/', profileController.createProfile);
 
+// GET /api/profile/:address/debug - Debug endpoint for testing
+router.get('/:address/debug', profileController.debugProfile);
+
 export default router;
 

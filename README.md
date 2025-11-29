@@ -29,6 +29,8 @@ Sui Veto is a DAO (Decentralized Autonomous Organization) platform that enables:
 
 ## 📦 Contract Structure
 
+**Package ID (Testnet):** `0x115bbd92212fbab8f1408a5d12e697a410fae1dafc171a61bfe5ded4554a1f45`
+
 ### ✅ Yapıldı (Completed)
 
 #### Core Modules
@@ -258,10 +260,17 @@ Sui Veto is a DAO (Decentralized Autonomous Organization) platform that enables:
 - [ ] Input sanitization (TODO: Zod validation enhancement)
 - [ ] API key management (TODO: For external integrations)
 
-#### Phase 9: Testing & Deployment (1-2 weeks)
+#### Phase 9: Testing & Deployment (1-2 weeks) 🚧 DEVAM EDİYOR
 
-- [ ] Unit tests (Jest/Vitest)
-- [ ] Integration tests
+- [x] Unit tests (Jest)
+  - [x] TransactionBuilder tests
+  - [x] AuthService tests
+  - [x] ProfileService tests (with mocks)
+- [x] Integration tests
+  - [x] API endpoint tests (supertest)
+  - [x] Profile integration tests (real Sui address)
+  - [x] Community integration tests
+  - [x] SuiObjectFetcher tests (real blockchain calls)
 - [ ] E2E tests
 - [ ] Contract interaction tests
 - [ ] Surflux event handling tests

@@ -165,6 +165,31 @@ export class TransactionBuilderService {
   }
 
   /**
+   * Build a transaction block for minting and transferring an event NFT
+   */
+  buildMintEventNFTTransaction(data: {
+    commityId: string;
+    xp: number;
+    recipient: string;
+  }): TransactionBlock {
+    const tx = new TransactionBlock();
+    
+    const commityId = tx.pure.id(data.commityId);
+    const xp = tx.pure.u64(data.xp);
+    const recipient = tx.pure.address(data.recipient);
+
+    tx.moveCall({
+      target: `${this.packageId}::dao_app::mint_and_transfer_event_nft`,
+      arguments: [commityId, xp, recipient],
+    });
+
+    logger.info(
+      `Built mint_and_transfer_event_nft transaction: commity ${data.commityId}, xp: ${data.xp}, recipient: ${data.recipient}`
+    );
+    return tx;
+  }
+
+  /**
    * Serialize transaction block to bytes
    * Returns the transaction block itself for client-side signing
    */

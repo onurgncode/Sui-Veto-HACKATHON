@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { Box, Flex, Heading, Text, Button } from "@radix-ui/themes";
 import { profileService, type MemberStats } from "../services/profileService";
+import { communityService } from "../services/communityService";
 
 interface ProfileScreenProps {
   nickname: string;
@@ -14,13 +15,27 @@ export function ProfileScreen({ nickname, onBack }: ProfileScreenProps) {
   const [communitiesCount, setCommunitiesCount] = useState(0);
 
   useEffect(() => {
-    if (currentAccount) {
-      profileService.getMemberStats(currentAccount.address).then((response) => {
-        if (response.success && response.data?.stats) {
-          setStats(response.data.stats);
+    const loadData = async () => {
+      if (currentAccount) {
+        const communitiesResponse = await communityService.getCommunitiesByMember(currentAccount.address);
+        if (communitiesResponse.success && communitiesResponse.data) {
+          const communities = communitiesResponse.data.communities || [];
+          setCommunitiesCount(communities.length);
+          
+          if (communities.length > 0) {
+            const firstCommunityId = communities[0].id;
+            const statsResponse = await profileService.getMemberStats(currentAccount.address, firstCommunityId);
+            if (statsResponse.success && statsResponse.data?.stats) {
+              setStats(statsResponse.data.stats);
+            }
+          }
         }
-      });
-    }
+      }
+    };
+    loadData();
+    
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
   }, [currentAccount]);
 
   return (
@@ -37,9 +52,18 @@ export function ProfileScreen({ nickname, onBack }: ProfileScreenProps) {
             backdropFilter: 'blur(10px)',
             border: '1px solid rgba(255, 255, 255, 0.2)',
             color: 'white',
+            borderRadius: '50%',
+            width: '40px',
+            height: '40px',
+            padding: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '24px',
+            fontWeight: 300,
           }}
         >
-          ← Geri
+          ×
         </Button>
       </Flex>
 

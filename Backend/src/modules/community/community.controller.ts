@@ -151,5 +151,55 @@ export class CommunityController {
       next(error);
     }
   };
+
+  getAllCommunities = async (
+    _req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const communities = await this.communityService.getAllCommunities();
+
+      res.json({
+        success: true,
+        data: {
+          communities,
+          total: communities.length,
+        },
+      } as ApiResponse);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getCommunitiesByMember = async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const { address } = req.params;
+
+      if (!address) {
+        res.status(400).json({
+          success: false,
+          error: 'Address is required',
+        } as ApiResponse);
+        return;
+      }
+
+      const communities = await this.communityService.getCommunitiesByMember(address);
+
+      res.json({
+        success: true,
+        data: {
+          communities,
+          total: communities.length,
+        },
+      } as ApiResponse);
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 

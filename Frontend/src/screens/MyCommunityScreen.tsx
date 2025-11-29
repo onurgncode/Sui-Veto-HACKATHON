@@ -1,34 +1,60 @@
-import { useState } from "react";
-import { Box, Flex, Heading, Text, Button, TextField, Separator } from "@radix-ui/themes";
-import { ArrowRightIcon } from "@radix-ui/react-icons";
+import { useState, useEffect } from "react";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import { Box, Flex, Heading, Text, Button } from "@radix-ui/themes";
+import { communityService, type Community } from "../services/communityService";
+import { formatAddress } from "../utils/formatters";
 
 interface MyCommunityScreenProps {
   nickname: string;
-  onBack: () => void;
+  onBack?: () => void;
+  onCommunityClick: (communityId: string) => void;
 }
 
-export function MyCommunityScreen({ nickname, onBack }: MyCommunityScreenProps) {
-  const [message, setMessage] = useState('');
+export function MyCommunityScreen({ nickname, onBack, onCommunityClick }: MyCommunityScreenProps) {
+  const currentAccount = useCurrentAccount();
+  const [communities, setCommunities] = useState<Community[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (message.trim()) {
-      try {
-        // TODO: Implement message sending via backend
-        console.log('Sending message:', message);
-        setMessage('');
-      } catch (error) {
-        console.error('Failed to send message:', error);
+  useEffect(() => {
+    const loadCommunities = async () => {
+      if (!currentAccount) {
+        setIsLoading(false);
+        return;
       }
-    }
-  };
+
+      setIsLoading(true);
+      try {
+        const response = await communityService.getCommunitiesByMember(currentAccount.address);
+        if (response.success && response.data) {
+          setCommunities(response.data.communities || []);
+        } else {
+          setCommunities([]);
+        }
+      } catch (error) {
+        console.error('Failed to load communities:', error);
+        setCommunities([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadCommunities();
+  }, [currentAccount]);
 
   return (
-    <Box>
-      <Flex justify="between" align="center" mb="5">
-        <Heading size="8" style={{ color: 'white', fontWeight: 700 }}>
-          My Community
+    <Box style={{ width: '100%', padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
+      <Flex justify="between" align="center" mb="6">
+        <Heading 
+          size="8" 
+          style={{ 
+            color: 'rgba(255, 255, 255, 0.95)', 
+            fontWeight: 700,
+            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+          }}
+        >
+          Topluluklarım
         </Heading>
+        {onBack && (
         <Button 
           variant="soft" 
           onClick={onBack}
@@ -37,150 +63,136 @@ export function MyCommunityScreen({ nickname, onBack }: MyCommunityScreenProps) 
             backdropFilter: 'blur(10px)',
             border: '1px solid rgba(255, 255, 255, 0.2)',
             color: 'white',
-          }}
-        >
-          ← Geri
-        </Button>
-      </Flex>
-
-      <Flex gap="4" direction={{ initial: 'column', md: 'row' }}>
-        <Box
-          className="liquid-glass-card"
-          style={{
-            flex: 2,
-            padding: '2rem',
-            minHeight: '600px',
+            borderRadius: '50%',
+            width: '40px',
+            height: '40px',
+            padding: 0,
             display: 'flex',
-            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '24px',
+            fontWeight: 300,
           }}
         >
-          <Heading 
-            size="6" 
-            mb="4"
-            style={{ 
-              color: 'white',
-              fontWeight: 600,
-            }}
-          >
-            Kanal
-          </Heading>
-          <Box
-            style={{
-              flex: 1,
-              overflowY: 'auto',
-              padding: '1.5rem',
-              background: 'rgba(0, 0, 0, 0.1)',
-              borderRadius: '12px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              marginBottom: '1.5rem',
-            }}
-          >
-            <Text 
-              size="3" 
-              style={{ 
-                color: 'rgba(255, 255, 255, 0.6)',
-              }}
-            >
-              Henüz mesaj yok. İlk mesajınızı gönderin!
-            </Text>
-          </Box>
-
-          <Separator size="4" style={{ background: 'rgba(255, 255, 255, 0.1)' }} />
-
-          <form onSubmit={handleSendMessage} style={{ marginTop: '1.5rem' }}>
-            <Flex gap="2" align="center">
-              <TextField.Root
-                className="liquid-glass-input"
-                size="3"
-                placeholder="Mesajınızı yazın..."
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                style={{ 
-                  flex: 1,
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  color: 'white',
-                }}
-              />
-              <Button
-                className="liquid-glass-button"
-                type="submit"
-                size="3"
-                disabled={!message.trim()}
-                style={{
-                  minWidth: '50px',
-                }}
-              >
-                <ArrowRightIcon width="20" height="20" />
-              </Button>
-            </Flex>
-          </form>
-
-          <Button
-            className="liquid-glass-button"
-            size="3"
-            variant="outline"
-            style={{
-              width: '100%',
-              marginTop: '1rem',
-              border: '1px solid rgba(102, 126, 234, 0.5)',
-              background: 'rgba(102, 126, 234, 0.1)',
-            }}
-          >
-            Oylama Başlat
-          </Button>
-        </Box>
-
-        <Box
-          className="liquid-glass-card"
-          style={{
-            flex: 1,
-            padding: '2.5rem',
-            height: 'fit-content',
-          }}
-        >
-          <Flex direction="column" gap="5" align="center">
-            <Box
-              style={{
-                width: '100px',
-                height: '100px',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontSize: '2.5rem',
-                fontWeight: 'bold',
-                boxShadow: '0 8px 32px rgba(102, 126, 234, 0.4)',
-              }}
-            >
-              {nickname.charAt(0).toUpperCase()}
-            </Box>
-            <Box style={{ textAlign: 'center' }}>
-              <Heading 
-                size="6" 
-                style={{ 
-                  color: 'white',
-                  fontWeight: 600,
-                }}
-              >
-                {nickname}
-              </Heading>
-              <Text 
-                size="4" 
-                style={{ 
-                  color: 'rgba(255, 255, 255, 0.7)',
-                  display: 'block',
-                  marginTop: '0.5rem',
-                }}
-              >
-                Level 10
-              </Text>
-            </Box>
-          </Flex>
-        </Box>
+          ×
+        </Button>
+        )}
       </Flex>
+
+      {isLoading ? (
+        <Box
+          style={{
+            padding: '4rem 2rem',
+            textAlign: 'center',
+          }}
+        >
+          <Text 
+            size="4" 
+            style={{ 
+              color: 'rgba(255, 255, 255, 0.7)',
+              fontSize: '1.1rem',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+            }}
+          >
+            Yükleniyor...
+          </Text>
+        </Box>
+      ) : communities.length === 0 ? (
+        <Box
+          style={{
+            padding: '4rem 2rem',
+            textAlign: 'center',
+            background: 'rgba(255, 255, 255, 0.03)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            borderRadius: '24px',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+          }}
+        >
+          <Text 
+            size="4" 
+            style={{ 
+              color: 'rgba(255, 255, 255, 0.6)',
+              fontSize: '1.1rem',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+            }}
+          >
+            Henüz hiçbir topluluğa üye değilsiniz. Explorer'dan bir topluluğa katılın!
+          </Text>
+        </Box>
+      ) : (
+        <Box
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+            gap: '1.5rem',
+          }}
+        >
+          {communities.map((community) => (
+            <Box
+              key={community.id}
+              onClick={() => onCommunityClick(community.id)}
+              style={{
+                background: 'rgba(255, 255, 255, 0.06)',
+                backdropFilter: 'blur(40px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+                borderRadius: '20px',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                padding: '2rem',
+                cursor: 'pointer',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-4px)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                e.currentTarget.style.boxShadow = '0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+                e.currentTarget.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)';
+              }}
+            >
+              <Flex direction="column" gap="4">
+                <Flex align="center" gap="3">
+                  <Box
+                    style={{
+                      width: '16px',
+                      height: '16px',
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.8) 0%, rgba(236, 72, 153, 0.8) 100%)',
+                      boxShadow: '0 0 12px rgba(139, 92, 246, 0.5)',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <Heading 
+                    size="6" 
+                    style={{ 
+                      color: 'rgba(255, 255, 255, 0.95)',
+                      fontWeight: 600,
+                      fontSize: '1.25rem',
+                      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+                    }}
+                  >
+                    {community.name}
+                  </Heading>
+                </Flex>
+                <Text 
+                  size="2" 
+                  style={{ 
+                    color: 'rgba(255, 255, 255, 0.5)',
+                    fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                    fontSize: '0.75rem',
+                  }}
+                >
+                  {formatAddress(community.id)}
+                </Text>
+              </Flex>
+            </Box>
+          ))}
+        </Box>
+      )}
     </Box>
   );
 }

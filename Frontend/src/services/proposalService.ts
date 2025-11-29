@@ -57,12 +57,15 @@ export const proposalService = {
 
   async createProposal(
     data: CreateProposalRequest
-  ): Promise<ApiResponse<{ proposal: Proposal }>> {
-    return apiClient.post<{ proposal: Proposal }>('/proposal', data);
+  ): Promise<ApiResponse<{ transaction: { transactionBlock: string } }>> {
+    return apiClient.post<{ transaction: { transactionBlock: string } }>('/proposal', data);
   },
 
-  async castVote(proposalId: string, vote: VoteRequest): Promise<ApiResponse<{ success: boolean }>> {
-    return apiClient.post<{ success: boolean }>(`/proposal/${proposalId}/vote`, vote);
+  async castVote(
+    proposalId: string, 
+    vote: VoteRequest & { profileId: string; commityId: string }
+  ): Promise<ApiResponse<{ transaction: { transactionBlock: string } }>> {
+    return apiClient.post<{ transaction: { transactionBlock: string } }>(`/proposal/${proposalId}/vote`, vote);
   },
 
   async getVotes(proposalId: string): Promise<ApiResponse<{ votes: Vote[]; total: number }>> {

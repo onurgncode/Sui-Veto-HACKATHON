@@ -468,21 +468,110 @@
   animation: fadeOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-/* Hide Sui dapp-kit default modals and UI */
-[data-radix-portal],
+/* Custom Wallet Modal Styling */
 [data-testid="wallet-kit-dialog"],
 [data-testid="wallet-kit-connect-modal"],
 [data-testid="wallet-kit-account-modal"],
 div[role="dialog"][aria-modal="true"]:has([data-testid]) {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
+  background: rgba(0, 0, 0, 0.8) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
 }
 
-/* Hide any wallet kit overlay */
-.wallet-kit-overlay,
-[class*="wallet-kit"],
-[class*="WalletKit"] {
-  display: none !important;
+/* Custom Wallet Modal Content */
+[data-testid="wallet-kit-dialog"] > div,
+[data-testid="wallet-kit-connect-modal"] > div,
+[data-testid="wallet-kit-account-modal"] > div {
+  background: rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(40px) !important;
+  -webkit-backdrop-filter: blur(40px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 24px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+  color: white !important;
+}
+
+/* Wallet Modal Header */
+[data-testid="wallet-kit-dialog"] h2,
+[data-testid="wallet-kit-connect-modal"] h2,
+[data-testid="wallet-kit-account-modal"] h2 {
+  color: white !important;
+  font-weight: 600 !important;
+}
+
+/* Wallet Modal Buttons */
+[data-testid="wallet-kit-dialog"] button,
+[data-testid="wallet-kit-connect-modal"] button,
+[data-testid="wallet-kit-account-modal"] button {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: white !important;
+  border-radius: 12px !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-testid="wallet-kit-dialog"] button:hover,
+[data-testid="wallet-kit-connect-modal"] button:hover,
+[data-testid="wallet-kit-account-modal"] button:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Wallet Sign Message Modal */
+div[role="dialog"]:has([data-testid]) {
+  background: rgba(0, 0, 0, 0.8) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+}
+
+div[role="dialog"]:has([data-testid]) > div {
+  background: rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(40px) !important;
+  -webkit-backdrop-filter: blur(40px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 24px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+  color: white !important;
+  padding: 2rem !important;
+  max-width: 500px !important;
+}
+
+div[role="dialog"]:has([data-testid]) h2,
+div[role="dialog"]:has([data-testid]) h3 {
+  color: white !important;
+  font-weight: 600 !important;
+}
+
+div[role="dialog"]:has([data-testid]) p,
+div[role="dialog"]:has([data-testid]) span {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+div[role="dialog"]:has([data-testid]) button {
+  border-radius: 12px !important;
+  transition: all 0.2s ease !important;
+  font-weight: 600 !important;
+}
+
+div[role="dialog"]:has([data-testid]) button[type="button"]:last-child {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: white !important;
+  border: none !important;
+}
+
+div[role="dialog"]:has([data-testid]) button[type="button"]:last-child:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4) !important;
+}
+
+div[role="dialog"]:has([data-testid]) button[type="button"]:first-of-type {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: white !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+div[role="dialog"]:has([data-testid]) button[type="button"]:first-of-type:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
 }

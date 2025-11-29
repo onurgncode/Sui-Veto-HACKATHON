@@ -4,6 +4,12 @@ import { CommunityController } from './community.controller';
 const router = Router();
 const communityController = new CommunityController();
 
+// GET /api/community
+router.get('/', communityController.getAllCommunities);
+
+// GET /api/community/member/:address
+router.get('/member/:address', communityController.getCommunitiesByMember);
+
 // GET /api/community/:id
 router.get('/:id', communityController.getCommunity);
 

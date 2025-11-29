@@ -1,0 +1,105 @@
+{
+  "common": {
+    "welcome": "Hoş Geldiniz",
+    "loading": "Yükleniyor...",
+    "error": "Hata",
+    "success": "Başarılı",
+    "cancel": "İptal",
+    "confirm": "Onayla",
+    "back": "Geri",
+    "close": "Kapat",
+    "save": "Kaydet",
+    "delete": "Sil",
+    "edit": "Düzenle",
+    "create": "Oluştur",
+    "search": "Ara",
+    "filter": "Filtrele",
+    "language": "Dil",
+    "turkish": "Türkçe",
+    "english": "English"
+  },
+  "login": {
+    "title": "Sui Veto DAO",
+    "hero": "Hırsın aleviyle cesaretlen",
+    "card1": {
+      "title": "Merkeziyetsiz Topluluk Platformu",
+      "description": "Blockchain teknolojisi ile çalışan, kullanıcıların özgürce topluluklar oluşturabildiği, yönetebildiği ve birbirleriyle etkileşime geçebildiği tamamen merkeziyetsiz bir platform. Tüm veriler blockchain üzerinde güvenli ve şeffaf bir şekilde saklanır."
+    },
+    "card2": {
+      "title": "Güvenli ve Şeffaf",
+      "description": "Merkezi bir otoriteye bağlı değildir. Kullanıcılar kendi verilerinin tam kontrolüne sahiptir. Smart contract'lar ile güvenli işlemler, değiştirilemez kayıtlar ve tam şeffaflık sağlanır. Topluluklarınızı oluşturun, yönetin ve büyütün."
+    },
+    "card3": {
+      "title": "Sui Veto DAO",
+      "description": "Merkeziyetsiz topluluk platformu. Topluluklarınızı oluşturun, oylamalar yapın ve blockchain üzerinde yönetin.",
+      "button": "Cüzdan Bağla"
+    },
+    "signModal": {
+      "title": "Mesajı İmzala",
+      "description": "Giriş yapmak için aşağıdaki mesajı imzalamanız gerekiyor:",
+      "address": "Adres",
+      "nonce": "Nonce",
+      "timestamp": "Zaman",
+      "sign": "İmzala",
+      "reject": "Reddet"
+    },
+    "errors": {
+      "walletRequired": "Wallet bağlantısı gerekli",
+      "zkLoginNotSupported": "ZkLogin signature scheme desteklenmiyor. Lütfen standart bir cüzdan (Ed25519, Secp256k1 veya Secp256r1) kullanın.",
+      "signatureError": "İmza hatası",
+      "authError": "Kimlik doğrulama hatası"
+    }
+  },
+  "explorer": {
+    "title": "Toplulukları Keşfet",
+    "createButton": "+ Topluluk Oluştur",
+    "empty": "Henüz topluluk yok. İlk topluluğu oluşturun!",
+    "tabs": {
+      "explorer": "Explorer",
+      "myCommunity": "Topluluklarım",
+      "profile": "Profil"
+    }
+  },
+  "myCommunity": {
+    "title": "Topluluklarım",
+    "empty": "Henüz hiçbir topluluğa üye değilsiniz. Explorer'dan bir topluluğa katılın!",
+    "channel": "Kanal",
+    "members": "Üyeler",
+    "startVoting": "Oylama Başlat",
+    "noMessages": "Henüz mesaj yok. İlk mesajınızı gönderin!"
+  },
+  "communityDetail": {
+    "title": "Topluluk Detayı",
+    "channel": "Kanal",
+    "members": "Üyeler",
+    "startVoting": "Oylama Başlat",
+    "noMessages": "Henüz mesaj yok. İlk mesajınızı gönderin!",
+    "noMembers": "Henüz üye yok",
+    "notFound": "Topluluk bulunamadı"
+  },
+  "profile": {
+    "title": "Profil",
+    "communities": "Topluluklar",
+    "xp": "XP",
+    "level": "Seviye"
+  },
+  "createCommunity": {
+    "title": "Topluluk Oluştur",
+    "name": "Topluluk Adı",
+    "namePlaceholder": "örn: Sui Türkiye",
+    "create": "Oluştur"
+  },
+  "nickname": {
+    "title": "Nickname Oluştur",
+    "placeholder": "Nickname'inizi girin",
+    "create": "Oluştur",
+    "found": "Profil bulundu, yönlendiriliyor...",
+    "creating": "Profil oluşturuluyor..."
+  },
+  "header": {
+    "title": "Merkeziyetsiz Community",
+    "walletAddress": "Cüzdan Adresi",
+    "logout": "Çıkış Yap"
+  }
+}
+

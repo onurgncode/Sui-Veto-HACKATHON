@@ -24,10 +24,9 @@ export const errorHandler = (
   });
 
   res.status(statusCode).json({
-    error: {
-      message,
-      ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
-    },
+    success: false,
+    error: message,
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 };
 

@@ -13,18 +13,21 @@ export interface CommunityMember {
 
 export interface CreateCommunityRequest {
   name: string;
-  description?: string;
 }
 
 export const communityService = {
+  async getAllCommunities(): Promise<ApiResponse<{ communities: Community[]; total: number }>> {
+    return apiClient.get<{ communities: Community[]; total: number }>('/community');
+  },
+
   async getCommunity(id: string): Promise<ApiResponse<{ community: Community; memberCount: number }>> {
     return apiClient.get<{ community: Community; memberCount: number }>(`/community/${id}`);
   },
 
   async createCommunity(
     data: CreateCommunityRequest
-  ): Promise<ApiResponse<{ community: Community }>> {
-    return apiClient.post<{ community: Community }>('/community', data);
+  ): Promise<ApiResponse<{ transaction: { transactionBlock: string } }>> {
+    return apiClient.post<{ transaction: { transactionBlock: string } }>('/community', data);
   },
 
   async joinCommunity(id: string): Promise<ApiResponse<{ success: boolean }>> {
@@ -33,6 +36,10 @@ export const communityService = {
 
   async getMembers(id: string): Promise<ApiResponse<{ members: CommunityMember[]; total: number }>> {
     return apiClient.get<{ members: CommunityMember[]; total: number }>(`/community/${id}/members`);
+  },
+
+  async getCommunitiesByMember(address: string): Promise<ApiResponse<{ communities: Community[]; total: number }>> {
+    return apiClient.get<{ communities: Community[]; total: number }>(`/community/member/${address}`);
   },
 };
 

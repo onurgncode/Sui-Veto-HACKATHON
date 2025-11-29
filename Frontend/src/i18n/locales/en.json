@@ -1,0 +1,105 @@
+{
+  "common": {
+    "welcome": "Welcome",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "back": "Back",
+    "close": "Close",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "filter": "Filter",
+    "language": "Language",
+    "turkish": "Türkçe",
+    "english": "English"
+  },
+  "login": {
+    "title": "Sui Veto DAO",
+    "hero": "Become emboldened by the flame of ambition",
+    "card1": {
+      "title": "Decentralized Community Platform",
+      "description": "A completely decentralized platform powered by blockchain technology, where users can freely create, manage, and interact with communities. All data is stored securely and transparently on the blockchain."
+    },
+    "card2": {
+      "title": "Secure and Transparent",
+      "description": "Not dependent on a central authority. Users have full control over their data. Secure transactions, immutable records, and full transparency are provided with smart contracts. Create, manage, and grow your communities."
+    },
+    "card3": {
+      "title": "Sui Veto DAO",
+      "description": "Decentralized community platform. Create communities, conduct votes, and manage on blockchain.",
+      "button": "Connect Wallet"
+    },
+    "signModal": {
+      "title": "Sign Message",
+      "description": "You need to sign the following message to log in:",
+      "address": "Address",
+      "nonce": "Nonce",
+      "timestamp": "Timestamp",
+      "sign": "Sign",
+      "reject": "Reject"
+    },
+    "errors": {
+      "walletRequired": "Wallet connection required",
+      "zkLoginNotSupported": "ZkLogin signature scheme is not supported. Please use a standard wallet (Ed25519, Secp256k1, or Secp256r1).",
+      "signatureError": "Signature error",
+      "authError": "Authentication error"
+    }
+  },
+  "explorer": {
+    "title": "Explore Communities",
+    "createButton": "+ Create Community",
+    "empty": "No communities yet. Create the first one!",
+    "tabs": {
+      "explorer": "Explorer",
+      "myCommunity": "My Communities",
+      "profile": "Profile"
+    }
+  },
+  "myCommunity": {
+    "title": "My Communities",
+    "empty": "You are not a member of any community yet. Join one from Explorer!",
+    "channel": "Channel",
+    "members": "Members",
+    "startVoting": "Start Voting",
+    "noMessages": "No messages yet. Send your first message!"
+  },
+  "communityDetail": {
+    "title": "Community Details",
+    "channel": "Channel",
+    "members": "Members",
+    "startVoting": "Start Voting",
+    "noMessages": "No messages yet. Send your first message!",
+    "noMembers": "No members yet",
+    "notFound": "Community not found"
+  },
+  "profile": {
+    "title": "Profile",
+    "communities": "Communities",
+    "xp": "XP",
+    "level": "Level"
+  },
+  "createCommunity": {
+    "title": "Create Community",
+    "name": "Community Name",
+    "namePlaceholder": "e.g: Sui Turkey",
+    "create": "Create"
+  },
+  "nickname": {
+    "title": "Create Nickname",
+    "placeholder": "Enter your nickname",
+    "create": "Create",
+    "found": "Profile found, redirecting...",
+    "creating": "Creating profile..."
+  },
+  "header": {
+    "title": "Decentralized Community",
+    "walletAddress": "Wallet Address",
+    "logout": "Logout"
+  }
+}
+
