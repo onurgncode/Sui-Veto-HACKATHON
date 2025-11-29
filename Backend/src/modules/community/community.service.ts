@@ -56,11 +56,13 @@ export class CommunityService {
       for (const field of dynamicFields) {
         // Members are stored as <address, bool> in dynamic fields
         // The field name is the address
-        if (field.name && field.value === null) {
+        if (field.name) {
           // This is a member entry (bool value stored as dynamic field)
+          // Note: Timestamp would require indexing transaction history
+          // For now, using current time as placeholder
           members.push({
             address: field.name,
-            joinedAt: Date.now(), // TODO: Get actual timestamp from transaction
+            joinedAt: Date.now(),
           });
         }
       }
