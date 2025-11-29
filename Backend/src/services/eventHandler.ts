@@ -1,5 +1,7 @@
 import { NotificationService } from '../modules/notification/notification.service';
 import { NotificationType } from '../modules/notification/notification.types';
+import { CommunityService } from '../modules/community/community.service';
+import { ProposalService } from '../modules/proposal/proposal.service';
 import {
   ProposalCreatedEvent,
   VoteCastedEvent,
@@ -9,9 +11,13 @@ import { logger } from '../utils/logger';
 
 export class EventHandlerService {
   private notificationService: NotificationService;
+  private communityService: CommunityService;
+  private proposalService: ProposalService;
 
   constructor() {
     this.notificationService = new NotificationService();
+    this.communityService = new CommunityService();
+    this.proposalService = new ProposalService();
   }
 
   /**
@@ -21,9 +27,10 @@ export class EventHandlerService {
     try {
       logger.info(`Handling ProposalCreated: ${event.proposalId}`);
 
-      // Create notification for community members
-      // TODO: Get community members and notify them
-      // For now, we'll create a notification for the creator
+      // Get community members
+      const members = await this.communityService.getMembers(event.commityId);
+
+      // Notify the creator
       await this.notificationService.createNotification({
         address: event.creator,
         type: NotificationType.PROPOSAL_CREATED,
@@ -35,8 +42,26 @@ export class EventHandlerService {
         },
       });
 
-      // Note: Real-time notifications will be handled via Surflux Flux Streams
-      // Frontend can subscribe to Surflux events or poll the notification API
+      // Notify all community members
+      for (const member of members) {
+        if (member.address !== event.creator) {
+          await this.notificationService.createNotification({
+            address: member.address,
+            type: NotificationType.PROPOSAL_CREATED,
+            title: 'New Proposal',
+            message: `A new proposal has been created in your community`,
+            data: {
+              proposalId: event.proposalId,
+              commityId: event.commityId,
+              creator: event.creator,
+            },
+          });
+        }
+      }
+
+      logger.info(
+        `Sent ProposalCreated notifications to ${members.length} members`
+      );
     } catch (error) {
       logger.error('Error handling ProposalCreated:', error);
     }
@@ -51,9 +76,12 @@ export class EventHandlerService {
         `Handling VoteCasted: proposal ${event.proposalId}, voter ${event.voter}`
       );
 
-      // Create notification for proposal creator
-      // TODO: Get proposal creator and notify them
-      // For now, we'll create a notification for the voter
+      // Get proposal to find creator
+      const proposal = await this.proposalService.getProposal(
+        event.proposalId
+      );
+
+      // Notify the voter
       await this.notificationService.createNotification({
         address: event.voter,
         type: NotificationType.VOTE_CASTED,
@@ -66,8 +94,21 @@ export class EventHandlerService {
         },
       });
 
-      // Note: Real-time notifications will be handled via Surflux Flux Streams
-      // Frontend can subscribe to Surflux events or poll the notification API
+      // Notify proposal creator if different from voter
+      if (proposal && proposal.creator !== event.voter) {
+        await this.notificationService.createNotification({
+          address: proposal.creator,
+          type: NotificationType.VOTE_CASTED,
+          title: 'New Vote',
+          message: `Someone voted on your proposal`,
+          data: {
+            proposalId: event.proposalId,
+            voter: event.voter,
+            voteType: event.voteType,
+            voteWeight: event.voteWeight,
+          },
+        });
+      }
     } catch (error) {
       logger.error('Error handling VoteCasted:', error);
     }
@@ -82,8 +123,16 @@ export class EventHandlerService {
         `Handling ProposalFinalized: ${event.proposalId}, status: ${event.status}`
       );
 
-      // Create notification for proposal creator and voters
-      // TODO: Get proposal creator and voters, notify them
+      // Get proposal to find creator and votes
+      const proposal = await this.proposalService.getProposal(
+        event.proposalId
+      );
+
+      if (!proposal) {
+        logger.warn(`Proposal ${event.proposalId} not found for finalization`);
+        return;
+      }
+
       const statusText =
         event.status === 1
           ? 'passed'
@@ -91,16 +140,43 @@ export class EventHandlerService {
           ? 'failed'
           : 'expired';
 
+      // Notify proposal creator
       await this.notificationService.createNotification({
-        address: '', // TODO: Get from proposal
+        address: proposal.creator,
         type: NotificationType.PROPOSAL_FINALIZED,
         title: 'Proposal Finalized',
-        message: `Proposal has been ${statusText}`,
+        message: `Your proposal has been ${statusText}`,
         data: {
           proposalId: event.proposalId,
           status: event.status,
+          statusText,
         },
       });
+
+      // Get all voters and notify them
+      const votes = await this.proposalService.getVotes(event.proposalId);
+      const notifiedAddresses = new Set<string>([proposal.creator]);
+
+      for (const vote of votes) {
+        if (!notifiedAddresses.has(vote.voter)) {
+          await this.notificationService.createNotification({
+            address: vote.voter,
+            type: NotificationType.PROPOSAL_FINALIZED,
+            title: 'Proposal Finalized',
+            message: `A proposal you voted on has been ${statusText}`,
+            data: {
+              proposalId: event.proposalId,
+              status: event.status,
+              statusText,
+            },
+          });
+          notifiedAddresses.add(vote.voter);
+        }
+      }
+
+      logger.info(
+        `Sent ProposalFinalized notifications to ${notifiedAddresses.size} addresses`
+      );
     } catch (error) {
       logger.error('Error handling ProposalFinalized:', error);
     }
