@@ -15,6 +15,11 @@ export const rateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // Disable trust proxy validation warning
+  // We use trust proxy: 1 (only first hop) which is safe for Railway
+  validate: {
+    trustProxy: false,
+  },
   // Skip rate limiting for health checks
   skip: (req) => {
     return req.path === '/health' || req.path === '/api';

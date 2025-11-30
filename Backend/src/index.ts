@@ -21,7 +21,8 @@ const PORT = process.env.PORT || 3000;
 const eventService = new EventService();
 
 // Trust proxy - Railway uses a reverse proxy
-app.set('trust proxy', true);
+// Use 1 to trust only the first hop (Railway's proxy) - more secure than true
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(helmet());
