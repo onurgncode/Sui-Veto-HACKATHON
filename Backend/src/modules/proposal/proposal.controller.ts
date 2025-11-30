@@ -381,7 +381,7 @@ export class ProposalController {
   ): Promise<void> => {
     try {
       const { id } = req.params;
-      const { creatorProfileId, commityId, transactionBlock, signature } = req.body;
+      const { creatorProfileId, commityId: _commityId, transactionBlock, signature } = req.body;
 
       if (!id) {
         res.status(400).json({
