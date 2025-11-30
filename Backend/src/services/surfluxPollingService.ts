@@ -205,6 +205,7 @@ export class SurfluxPollingService {
         proposalId: proposalId as string,
         commityId: commityId as string,
         creator: creator as string,
+        timestamp: Date.now(),
       });
 
       // Broadcast via WebSocket
@@ -243,6 +244,7 @@ export class SurfluxPollingService {
         voter: voter as string,
         voteType: voteType as number,
         voteWeight: voteWeight as number,
+        timestamp: Date.now(),
       });
 
       // Broadcast via WebSocket
@@ -278,6 +280,7 @@ export class SurfluxPollingService {
       await this.eventHandler.onProposalFinalized({
         proposalId: proposalId as string,
         status: status as number,
+        timestamp: Date.now(),
       });
 
       // Broadcast via WebSocket

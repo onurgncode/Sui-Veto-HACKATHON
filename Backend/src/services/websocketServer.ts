@@ -5,8 +5,9 @@
 
 import { WebSocketServer, WebSocket } from 'ws';
 import { logger } from '../utils/logger';
-import { SURFLUX_CONFIG } from '../config/surflux';
-import { PACKAGE_ID } from '../config/sui';
+// Imported for future use
+// import { SURFLUX_CONFIG } from '../config/surflux';
+// import { PACKAGE_ID } from '../config/sui';
 
 export interface WebSocketMessage {
   type: 'proposal_created' | 'vote_casted' | 'proposal_finalized' | 'notification';
@@ -17,6 +18,7 @@ export interface WebSocketMessage {
 export class WebSocketServerService {
   private wss: WebSocketServer | null = null;
   private clients: Set<WebSocket> = new Set();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private isRunning: boolean = false;
 
   /**
