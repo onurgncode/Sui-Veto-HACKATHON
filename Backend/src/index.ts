@@ -20,6 +20,9 @@ const server = createServer(app);
 const PORT = process.env.PORT || 3000;
 const eventService = new EventService();
 
+// Trust proxy - Railway uses a reverse proxy
+app.set('trust proxy', true);
+
 // Middleware
 app.use(helmet());
 app.use(compression());
