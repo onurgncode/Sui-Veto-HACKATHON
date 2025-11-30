@@ -419,7 +419,7 @@ export class ProposalController {
 
       // Use provided values or fallback to proposal data
       const finalCreatorProfileId = creatorProfileId || '';
-      const finalCommityId = commityId || proposal.commityId;
+      // const finalCommityId = commityId || proposal.commityId; // Not used currently
 
       if (!finalCreatorProfileId) {
         res.status(400).json({
