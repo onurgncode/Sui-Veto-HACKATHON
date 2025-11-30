@@ -1,6 +1,6 @@
 import { logger } from '../utils/logger';
 
-const apiKey = process.env.SURFLUX_API_KEY || 'fc664ac9-caa6-4123-96ca-e564c569d910';
+const apiKey = process.env.SURFLUX_API_KEY || '';
 const fluxStreamName = process.env.SURFLUX_FLUX_STREAM_NAME || 'gulf-menhaden';
 const baseApiUrl = process.env.SURFLUX_API_URL || 'https://api.surflux.dev';
 
@@ -9,8 +9,11 @@ const apiUrl = fluxStreamName
   ? `${baseApiUrl}/flux-streams/${fluxStreamName}`
   : baseApiUrl;
 
-if (!apiKey) {
-  logger.warn('Surflux API key not found. Surflux features will be disabled.');
+// Only enable if API key is explicitly provided
+const isEnabled = !!process.env.SURFLUX_API_KEY && apiKey.length > 0;
+
+if (!isEnabled) {
+  logger.info('Surflux API key not provided. Surflux features will be disabled.');
 }
 
 export const SURFLUX_CONFIG = {
@@ -18,7 +21,7 @@ export const SURFLUX_CONFIG = {
   apiUrl,
   baseApiUrl,
   fluxStreamName,
-  enabled: !!apiKey,
+  enabled: isEnabled,
 };
 
 logger.info(`Surflux config initialized: ${SURFLUX_CONFIG.enabled ? 'enabled' : 'disabled'}`);
