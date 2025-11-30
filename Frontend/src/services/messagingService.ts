@@ -11,8 +11,6 @@ import { useSuiClient } from '@mysten/dapp-kit';
 import type { SuiClient } from '@mysten/sui/client';
 import { SealClient } from '@mysten/seal';
 import { walrus } from '@mysten/walrus';
-import { SealClient } from '@mysten/seal';
-import { walrus } from '@mysten/walrus';
 
 export interface Message {
   id: string;

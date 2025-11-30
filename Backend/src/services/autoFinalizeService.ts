@@ -13,15 +13,10 @@ import { suiClient } from '../config/sui';
  * Uses sponsor gas to execute transactions
  */
 export class AutoFinalizeService {
-  // Services will be used in future implementations
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private proposalService: ProposalService;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private profileService: ProfileService;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private communityService: CommunityService;
   private transactionBuilder: TransactionBuilderService;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private suiClient: SuiClient;
   private isRunning: boolean = false;
 
