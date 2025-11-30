@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
-import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { useCurrentAccount, useWallets } from "@mysten/dapp-kit";
 import { Box, Flex, Heading, Text, Button, TextField } from "@radix-ui/themes";
 import { proposalService } from "../services/proposalService";
 import { profileService } from "../services/profileService";
 import { communityService } from "../services/communityService";
 import { formatAddress } from "../utils/formatters";
+import { toB64 } from "@mysten/bcs";
+import { fromB64 } from "@mysten/sui/utils";
+import { Transaction } from "@mysten/sui/transactions";
 
 interface JoinRequestScreenProps {
   communityId: string;
@@ -18,7 +21,7 @@ export function JoinRequestScreen({
   onRequestSent 
 }: JoinRequestScreenProps) {
   const currentAccount = useCurrentAccount();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const wallets = useWallets();
   const [community, setCommunity] = useState<{ id: string; name: string } | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
@@ -66,7 +69,7 @@ export function JoinRequestScreen({
     setError(null);
 
     try {
-      const packageId = import.meta.env.VITE_PACKAGE_ID || '0x115bbd92212fbab8f1408a5d12e697a410fae1dafc171a61bfe5ded4554a1f45';
+      const packageId = import.meta.env.VITE_PACKAGE_ID || '0x6b30552018493c6daaef95c7a1956aca5adc1528513a7bc0d831cd9b136a8f90';
       
       // Create a join request proposal
       // Title: "Join Request from {address}"
@@ -74,49 +77,92 @@ export function JoinRequestScreen({
       const title = `Katılma İsteği: ${formatAddress(currentAccount.address)}`;
       const description = message.trim() || `${formatAddress(currentAccount.address)} bu topluluğa katılmak istiyor.`;
       
-      // Deadline: 7 days from now
+      // Deadline: 7 days from now (in milliseconds, as contract expects)
       const deadline = Date.now() + (7 * 24 * 60 * 60 * 1000);
       // Quorum: 50% of members (we'll use a default for now)
       const quorumThreshold = 50;
 
-      // Create proposal transaction
-      const { Transaction } = await import("@mysten/sui/transactions");
-      const tx = new Transaction();
-      
       // We need message_id - for now, we'll use a placeholder or generate one
       // In a real implementation, this would come from a messaging system
       // For now, we'll use the community ID as a placeholder
       const messageId = communityId; // Placeholder - should be from messaging system
-      
-      tx.moveCall({
-        target: `${packageId}::dao_app::create_proposal`,
-        arguments: [
-          tx.object(communityId),
-          tx.pure.id(messageId),
-          tx.pure.string(title),
-          tx.pure.string(description),
-          tx.pure.u64(deadline),
-          tx.pure.u64(quorumThreshold),
-        ],
-      });
 
-      signAndExecute(
-        {
-          transaction: tx,
-        },
-        {
-          onSuccess: () => {
-            console.log('Join request sent successfully');
-            setIsSubmitting(false);
-            onRequestSent();
-          },
-          onError: (error) => {
-            console.error('Join request failed:', error);
-            setError('Katılma isteği gönderilemedi: ' + (error.message || 'Bilinmeyen hata'));
-            setIsSubmitting(false);
-          },
+      // Get connected wallet for signing
+      const connectedWallet = wallets.find(w => w.accounts.length > 0);
+      if (!connectedWallet || !currentAccount) {
+        throw new Error('No connected wallet found');
+      }
+
+      // Check if signTransactionBlock feature is available
+      const signFeature = connectedWallet.features['sui:signTransactionBlock'];
+      if (!signFeature) {
+        throw new Error('Sign transaction feature not available');
+      }
+
+      // Build transaction on backend with sponsor gas
+      const moveCallTarget = `${packageId}::dao_app::create_proposal`;
+      const moveCallArgs = [
+        { type: 'object', value: communityId },
+        { type: 'id', value: messageId },
+        { type: 'string', value: title },
+        { type: 'string', value: description },
+        { type: 'u64', value: deadline },
+        { type: 'u64', value: quorumThreshold },
+        { type: 'bool', value: true }, // is_join_request = true for join requests
+      ];
+
+      // Build transaction on backend (avoids CORS issues)
+      let builtTx: Uint8Array;
+      try {
+        const buildResponse = await proposalService.buildSponsoredCreateProposal(
+          currentAccount.address,
+          moveCallTarget,
+          moveCallArgs
+        );
+        
+        if (!buildResponse.success || !buildResponse.data) {
+          throw new Error(buildResponse.error || 'Failed to build sponsored transaction');
         }
-      );
+        
+        // Decode base64 transaction block
+        builtTx = fromB64(buildResponse.data.transactionBlock);
+        console.log('[JoinRequestScreen] ✅ Transaction built successfully on backend with sponsor gas');
+      } catch (buildError: any) {
+        console.error('[JoinRequestScreen] Transaction build error:', buildError);
+        setError('Transaction oluşturulamadı. Lütfen tekrar deneyin.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Sign the full transaction
+      try {
+        // Sign the transaction
+        const account = currentAccount;
+        const signResult = await signFeature.signTransactionBlock({
+          transactionBlock: builtTx as any,
+          account: account,
+          chain: (account.chains && account.chains[0]) || 'sui:testnet',
+        });
+        const signature = signResult.signature;
+        
+        // Send to backend for sponsor gas execution
+        const sponsorResult = await proposalService.sponsorCreateProposal(
+          toB64(builtTx),
+          signature
+        );
+        
+        if (!sponsorResult.success) {
+          throw new Error(sponsorResult.error || 'Sponsor gas failed');
+        }
+        
+        console.log('[JoinRequestScreen] Join request created with sponsored gas:', sponsorResult.data);
+        setIsSubmitting(false);
+        onRequestSent();
+      } catch (error: any) {
+        console.error('[JoinRequestScreen] Error signing or executing transaction:', error);
+        setError(error?.message || 'Transaction başarısız oldu. Lütfen tekrar deneyin.');
+        setIsSubmitting(false);
+      }
     } catch (error) {
       console.error('Join request error:', error);
       setError('Katılma isteği hatası: ' + (error instanceof Error ? error.message : 'Bilinmeyen hata'));

@@ -19,6 +19,7 @@ export interface Proposal {
   totalVoters: number;
   status: ProposalStatus;
   quorumThreshold: number;
+  isJoinRequest: boolean;
 }
 
 export interface CreateProposalRequest {
@@ -28,6 +29,7 @@ export interface CreateProposalRequest {
   description: string;
   deadline: number;
   quorumThreshold: number;
+  isJoinRequest: boolean;
 }
 
 export interface VoteRequest {

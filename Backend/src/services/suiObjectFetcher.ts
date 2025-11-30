@@ -4,6 +4,7 @@ import { SurfluxClient } from './surfluxClient';
 import { SURFLUX_CONFIG } from '../config/surflux';
 
 const COMMITY_TYPE = `${PACKAGE_ID}::commity::Commity`;
+const PROPOSAL_TYPE = `${PACKAGE_ID}::proposal::Proposal`;
 
 export interface SuiObjectInfo {
   objectId: string;
@@ -324,7 +325,7 @@ export class SuiObjectFetcher {
           cursor,
         });
 
-        for (const field of response.data) {
+      for (const field of response.data) {
           // Field name'i parse et - address veya string olabilir
           let fieldName: string;
           if (field.name.type === 'address') {
@@ -345,11 +346,11 @@ export class SuiObjectFetcher {
             logger.debug(`Could not fetch field object ${field.objectId}, may be primitive value`);
           }
 
-          fields.push({
+        fields.push({
             name: fieldName,
-            value: fieldValue,
-          });
-        }
+          value: fieldValue,
+        });
+      }
 
         hasNextPage = response.hasNextPage;
         cursor = response.nextCursor || undefined;
@@ -480,11 +481,11 @@ export class SuiObjectFetcher {
                 
                 // Check if it's a Commity object
                 if (objectType === COMMITY_TYPE || objectType.includes('commity::Commity')) {
-                  // Avoid duplicates
-                  if (!seenObjectIds.has(objectId)) {
-                    seenObjectIds.add(objectId);
-                    
-                    // Fetch the full object
+                // Avoid duplicates
+                if (!seenObjectIds.has(objectId)) {
+                  seenObjectIds.add(objectId);
+                  
+                  // Fetch the full object
                     try {
                       const communityObject = await this.getObject(objectId);
                       if (communityObject) {
@@ -508,9 +509,9 @@ export class SuiObjectFetcher {
                   if (!seenObjectIds.has(objectId)) {
                     seenObjectIds.add(objectId);
                     try {
-                      const communityObject = await this.getObject(objectId);
-                      if (communityObject) {
-                        communities.push(communityObject);
+                  const communityObject = await this.getObject(objectId);
+                  if (communityObject) {
+                    communities.push(communityObject);
                         logger.info(`Found community from published object: ${objectId}`);
                       }
                     } catch (objError) {
@@ -592,6 +593,200 @@ export class SuiObjectFetcher {
       logger.error(`Error checking membership for ${address} in ${communityId}:`, error);
       // Hata durumunda false dön ama log'la
       return false;
+    }
+  }
+
+  /**
+   * Get all Proposal objects for a specific community
+   * First tries Surflux indexing API (more efficient), falls back to transaction query if Surflux is disabled
+   */
+  async getProposalsByCommunity(commityId: string): Promise<SuiObjectInfo[]> {
+    try {
+      logger.info(`Fetching proposals for community: ${commityId}`);
+      
+      // Try Surflux indexing first if enabled
+      if (SURFLUX_CONFIG.enabled) {
+        try {
+          logger.info('Fetching proposals using Surflux indexing API');
+          return await this.getProposalsByCommunityFromSurflux(commityId);
+        } catch (surfluxError) {
+          logger.warn('Surflux indexing failed, falling back to transaction query:', surfluxError);
+          // Fall back to transaction-based query
+          return await this.getProposalsByCommunityFromTransactions(commityId);
+        }
+      } else {
+        logger.info('Surflux not enabled, using transaction-based query');
+        return await this.getProposalsByCommunityFromTransactions(commityId);
+      }
+    } catch (error) {
+      logger.error(`Error fetching proposals for community ${commityId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get proposals using Surflux indexing API
+   */
+  private async getProposalsByCommunityFromSurflux(commityId: string): Promise<SuiObjectInfo[]> {
+    try {
+      logger.info(`Fetching proposals from Surflux indexing for community: ${commityId}`);
+      
+      // Use retry logic to handle rate limiting
+      const surfluxObjects = await this.surfluxClient.queryObjectsByTypeWithRetry(
+        PROPOSAL_TYPE,
+        { limit: 100, orderBy: 'createdAt', orderDirection: 'desc' },
+        3 // max retries
+      );
+      
+      const proposals: SuiObjectInfo[] = [];
+      
+      for (const surfluxObj of surfluxObjects) {
+        try {
+          // Filter by community ID
+          const proposalCommityId = (surfluxObj.fields.commity_id as string) || '';
+          if (proposalCommityId === commityId) {
+            // Convert Surflux object to SuiObjectInfo format
+            proposals.push({
+              objectId: surfluxObj.objectId,
+              type: surfluxObj.type,
+              data: surfluxObj.fields as Record<string, unknown>,
+            });
+            logger.info(`Found proposal from Surflux for community ${commityId}: ${surfluxObj.objectId}`);
+          }
+        } catch (objError) {
+          logger.error(`Error processing Surflux proposal object ${surfluxObj.objectId}:`, objError);
+        }
+      }
+
+      logger.info(`Found ${proposals.length} proposals via Surflux indexing for community ${commityId}`);
+      return proposals;
+    } catch (error) {
+      logger.error('Error fetching proposals from Surflux:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fallback method: Get proposals by querying create_proposal transactions
+   */
+  private async getProposalsByCommunityFromTransactions(commityId: string): Promise<SuiObjectInfo[]> {
+    try {
+      logger.info(`Fetching proposals from transactions (fallback method) for community: ${commityId}`);
+      
+      const proposals: SuiObjectInfo[] = [];
+      const seenObjectIds = new Set<string>();
+      
+      // Query transactions that call create_proposal
+      let cursor: string | null | undefined = undefined;
+      let hasNextPage = true;
+      let pageCount = 0;
+      const maxPages = 50;
+
+      while (hasNextPage && pageCount < maxPages) {
+        pageCount++;
+        
+        const response = await suiClient.queryTransactionBlocks({
+          filter: {
+            MoveFunction: {
+              package: PACKAGE_ID,
+              module: 'dao_app',
+              function: 'create_proposal',
+            },
+          },
+          options: {
+            showEffects: true,
+            showObjectChanges: true,
+          },
+          cursor,
+          limit: 50,
+        });
+
+        logger.info(`Proposal transaction query page ${pageCount}: Found ${response.data.length} transactions`);
+
+        // Extract created Proposal objects from transaction effects
+        for (const tx of response.data) {
+          if (tx.objectChanges) {
+            for (const change of tx.objectChanges) {
+              // Check for created objects
+              if (change.type === 'created' && 'objectType' in change && 'objectId' in change) {
+                const objectType = change.objectType as string;
+                const objectId = change.objectId as string;
+                
+                // Check if it's a Proposal object
+                if (objectType === PROPOSAL_TYPE || objectType.includes('proposal::Proposal')) {
+                  // Avoid duplicates
+                  if (!seenObjectIds.has(objectId)) {
+                    seenObjectIds.add(objectId);
+                    
+                    // Fetch the full object
+                    try {
+                      const proposalObject = await this.getObject(objectId);
+                      if (proposalObject) {
+                        // Check if this proposal belongs to the requested community
+                        const proposalCommityId = (proposalObject.data.commity_id as string) || '';
+                        if (proposalCommityId === commityId) {
+                          proposals.push(proposalObject);
+                          logger.info(`Found proposal for community ${commityId}: ${objectId}`);
+                        }
+                      }
+                    } catch (objError) {
+                      logger.error(`Error fetching proposal object ${objectId}:`, objError);
+                    }
+                  }
+                }
+              }
+            }
+          }
+          
+          // Also check effects for created objects
+          if (tx.effects && (tx.effects as any).created) {
+            const created = (tx.effects as any).created;
+            if (Array.isArray(created)) {
+              for (const createdObj of created) {
+                if (createdObj.reference && createdObj.reference.objectId) {
+                  const objectId = createdObj.reference.objectId;
+                  
+                  if (!seenObjectIds.has(objectId)) {
+                    seenObjectIds.add(objectId);
+                    
+                    try {
+                      const obj = await suiClient.getObject({
+                        id: objectId,
+                        options: { showType: true, showContent: true },
+                      });
+                      
+                      if (obj.data && obj.data.type && (obj.data.type === PROPOSAL_TYPE || obj.data.type.includes('proposal::Proposal'))) {
+                        if (obj.data.content && obj.data.content.dataType === 'moveObject') {
+                          const proposalCommityId = (obj.data.content.fields as any).commity_id || '';
+                          if (proposalCommityId === commityId) {
+                            proposals.push({
+                              objectId: obj.data.objectId,
+                              type: obj.data.type,
+                              data: obj.data.content.fields as Record<string, unknown>,
+                            });
+                            logger.info(`Found proposal from effects for community ${commityId}: ${objectId}`);
+                          }
+                        }
+                      }
+                    } catch (objError) {
+                      // Continue to next
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        hasNextPage = response.hasNextPage || false;
+        cursor = response.nextCursor;
+      }
+
+      logger.info(`Found ${proposals.length} proposals for community ${commityId} from transactions`);
+      return proposals;
+    } catch (error) {
+      logger.error(`Error fetching proposals from transactions for community ${commityId}:`, error);
+      throw error;
     }
   }
 }

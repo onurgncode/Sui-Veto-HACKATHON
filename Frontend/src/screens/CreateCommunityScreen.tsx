@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { Box, Flex, Heading, Text, Button, TextField } from "@radix-ui/themes";
 import { profileService } from "../services/profileService";
 import { communityService } from "../services/communityService";
-import { useSuiClient } from "@mysten/dapp-kit";
+import { messagingService } from "../services/messagingService";
 
 interface CreateCommunityScreenProps {
   onBack: () => void;
@@ -33,8 +33,15 @@ export function CreateCommunityScreen({ onBack, onCreated }: CreateCommunityScre
       }
 
       // PACKAGE_ID'yi environment variable'dan al veya default değer kullan
-      const packageId = import.meta.env.VITE_PACKAGE_ID || '0x115bbd92212fbab8f1408a5d12e697a410fae1dafc171a61bfe5ded4554a1f45';
+      const packageId = import.meta.env.VITE_PACKAGE_ID || '0x6b30552018493c6daaef95c7a1956aca5adc1528513a7bc0d831cd9b136a8f90';
       
+      // Get profile ID first
+      const profileResponse = await profileService.getProfile(currentAccount.address);
+      if (!profileResponse.success || !profileResponse.data?.profile) {
+        throw new Error('Profil bulunamadı. Lütfen önce profil oluşturun.');
+      }
+      const profileId = profileResponse.data.profile.id;
+
       // Frontend'de transaction'ı direkt oluştur
       const { Transaction } = await import("@mysten/sui/transactions");
       const tx = new Transaction();
@@ -44,16 +51,18 @@ export function CreateCommunityScreen({ onBack, onCreated }: CreateCommunityScre
       });
       
       try {
-        const result = await signAndExecute({
+        // First transaction: Create community
+        const createResult = await signAndExecute({
           transaction: tx,
         });
         
         await new Promise(resolve => setTimeout(resolve, 2000));
         
+        // Get community ID from transaction result
         let communityId: string | null = null;
         
         try {
-          const txDigest = result.digest;
+          const txDigest = createResult.digest;
           const txDetails = await suiClient.getTransactionBlock({
             digest: txDigest,
             options: {
@@ -96,9 +105,10 @@ export function CreateCommunityScreen({ onBack, onCreated }: CreateCommunityScre
             }
           }
         } catch (txError) {
-          // Transaction details fetch failed, try fallback
+          console.error('Error fetching transaction details:', txError);
         }
         
+        // Fallback: Get community ID from API
         if (!communityId) {
           try {
             await new Promise(resolve => setTimeout(resolve, 2000));
@@ -109,43 +119,198 @@ export function CreateCommunityScreen({ onBack, onCreated }: CreateCommunityScre
               if (matchingCommunity) {
                 communityId = matchingCommunity.id;
               } else if (allCommunities.length > 0) {
+                // Get the most recently created one (last in list)
                 communityId = allCommunities[allCommunities.length - 1].id;
               }
             }
           } catch (altError) {
-            // Fallback method failed
+            console.error('Fallback method failed:', altError);
           }
         }
 
-        if (communityId && currentAccount) {
-          const profileResponse = await profileService.getProfile(currentAccount.address);
-          
-          if (profileResponse.success && profileResponse.data?.profile) {
-            const profileId = profileResponse.data.profile.id;
-            const { Transaction } = await import("@mysten/sui/transactions");
-            const joinTx = new Transaction();
-            joinTx.moveCall({
-              target: `${packageId}::dao_app::join_commity`,
-              arguments: [
-                joinTx.object(profileId),
-                joinTx.object(communityId),
-              ],
-            });
+        // Second transaction: Join community (creator must be a member to vote)
+        if (communityId) {
+          const joinTx = new Transaction();
+          joinTx.moveCall({
+            target: `${packageId}::dao_app::join_commity`,
+            arguments: [
+              joinTx.object(profileId),
+              joinTx.object(communityId),
+            ],
+          });
 
+          try {
+            await signAndExecute({
+              transaction: joinTx,
+            });
+            console.log('[CreateCommunity] Creator successfully joined the community');
+            
+            // Wait for transaction to be indexed and verify membership
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            // Step 3: Create messaging channel for the community
             try {
-              await signAndExecute({
-                transaction: joinTx,
+              console.log('[CreateCommunity] Creating messaging channel for community:', communityId);
+              
+              // Initialize messaging service
+              await messagingService.initialize(suiClient);
+              
+              // Get all current members (just the creator for now)
+              const currentMembers = [currentAccount.address];
+              
+              // Create channel with creator as initial member
+              // The channel will be automatically found/created when other members join
+              const createChannelFlow = messagingService.getClient().createChannelFlow({
+                creatorAddress: currentAccount.address,
+                initialMemberAddresses: currentMembers,
               });
-              await new Promise(resolve => setTimeout(resolve, 5000));
-            } catch (joinError) {
-              // Auto-join failed, but community was created successfully
+
+              // Build and execute channel creation transaction
+              const channelTx = createChannelFlow.build();
+              channelTx.setSender(currentAccount.address);
+
+              const channelResult = await signAndExecute({
+                transaction: channelTx,
+              });
+
+              // Wait for transaction to be indexed
               await new Promise(resolve => setTimeout(resolve, 2000));
+
+              // Get generated caps
+              const { creatorMemberCap } = await createChannelFlow.getGeneratedCaps({
+                digest: channelResult.digest,
+              });
+
+              // Generate and attach encryption key
+              const { transaction: encryptionTx } = await createChannelFlow.generateAndAttachEncryptionKey({
+                creatorMemberCap,
+              });
+              encryptionTx.setSender(currentAccount.address);
+
+              // Execute encryption key transaction
+              await signAndExecute({
+                transaction: encryptionTx,
+              });
+
+              // Wait for encryption transaction to be indexed
+              await new Promise(resolve => setTimeout(resolve, 2000));
+
+              // Get the channel ID
+              const { channelId } = createChannelFlow.getGeneratedEncryptionKey();
+              
+              console.log('[CreateCommunity] Messaging channel created:', channelId);
+            } catch (channelError) {
+              // Don't fail community creation if channel creation fails
+              console.error('[CreateCommunity] Failed to create messaging channel:', channelError);
+              console.warn('[CreateCommunity] Community created but channel creation failed. Channel will be created when first accessed.');
             }
+            
+            // Verify membership directly from chain
+            let membershipVerified = false;
+            let retryCount = 0;
+            const maxRetries = 5;
+            
+            while (!membershipVerified && retryCount < maxRetries) {
+              try {
+                const dynamicFields = await suiClient.getDynamicFields({
+                  parentId: communityId,
+                });
+                
+                const normalizedAddress = currentAccount.address.toLowerCase();
+                membershipVerified = dynamicFields.data.some((field) => {
+                  if (field.name.type === 'address') {
+                    return (field.name.value as string).toLowerCase() === normalizedAddress;
+                  }
+                  return false;
+                });
+                
+                if (membershipVerified) {
+                  console.log('[CreateCommunity] Membership verified from chain');
+                  break;
+                }
+              } catch (verifyError) {
+                console.warn(`[CreateCommunity] Membership verification attempt ${retryCount + 1} failed:`, verifyError);
+              }
+              
+              retryCount++;
+              if (!membershipVerified && retryCount < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+              }
+            }
+            
+            if (!membershipVerified) {
+              console.warn('[CreateCommunity] Membership could not be verified, but join transaction succeeded');
+            }
+
+            // Step 3: Create messaging channel for the community
+            try {
+              console.log('[CreateCommunity] Creating messaging channel for community:', communityId);
+              
+              // Initialize messaging service
+              await messagingService.initialize(suiClient);
+              
+              // Get all current members (just the creator for now)
+              const currentMembers = [currentAccount.address];
+              
+              // Create channel with creator as initial member
+              // The channel will be automatically found/created when other members join
+              const createChannelFlow = messagingService.getClient().createChannelFlow({
+                creatorAddress: currentAccount.address,
+                initialMemberAddresses: currentMembers,
+              });
+
+              // Build and execute channel creation transaction
+              const channelTx = createChannelFlow.build();
+              channelTx.setSender(currentAccount.address);
+
+              const channelResult = await signAndExecute({
+                transaction: channelTx,
+              });
+
+              // Wait for transaction to be indexed
+              await new Promise(resolve => setTimeout(resolve, 2000));
+
+              // Get generated caps
+              const { creatorMemberCap } = await createChannelFlow.getGeneratedCaps({
+                digest: channelResult.digest,
+              });
+
+              // Generate and attach encryption key
+              const { transaction: encryptionTx } = await createChannelFlow.generateAndAttachEncryptionKey({
+                creatorMemberCap,
+              });
+              encryptionTx.setSender(currentAccount.address);
+
+              // Execute encryption key transaction
+              await signAndExecute({
+                transaction: encryptionTx,
+              });
+
+              // Wait for encryption transaction to be indexed
+              await new Promise(resolve => setTimeout(resolve, 2000));
+
+              // Get the channel ID
+              const { channelId } = createChannelFlow.getGeneratedEncryptionKey();
+              
+              console.log('[CreateCommunity] Messaging channel created:', channelId);
+            } catch (channelError) {
+              // Don't fail community creation if channel creation fails
+              console.error('[CreateCommunity] Failed to create messaging channel:', channelError);
+              console.warn('[CreateCommunity] Community created but channel creation failed. Channel will be created when first accessed.');
+            }
+          } catch (joinError) {
+            console.error('[CreateCommunity] Auto-join failed:', joinError);
+            const errorMsg = joinError instanceof Error ? joinError.message : 'Bilinmeyen hata';
+            // This is critical - if join fails, creator won't be able to vote
+            throw new Error(`Topluluk oluşturuldu ancak otomatik üyelik başarısız oldu: ${errorMsg}. Lütfen manuel olarak topluluğa katılın.`);
           }
+        } else {
+          console.warn('[CreateCommunity] Community ID not found, cannot auto-join');
+          throw new Error('Topluluk oluşturuldu ancak topluluk ID bulunamadı. Lütfen sayfayı yenileyin ve manuel olarak topluluğa katılın.');
         }
         } catch (error) {
           console.error('Error processing community creation:', error);
-          // Still consider it successful since community was created
+          throw error;
         }
         
         setIsSubmitting(false);
@@ -157,7 +322,7 @@ export function CreateCommunityScreen({ onBack, onCreated }: CreateCommunityScre
         console.error('Community creation failed:', error);
         setError('Topluluk oluşturma başarısız: ' + (error instanceof Error ? error.message : 'Bilinmeyen hata'));
         setIsSubmitting(false);
-      }
+    }
   };
 
   return (

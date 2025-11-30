@@ -13,13 +13,16 @@ import { ProposalListScreen } from "./screens/ProposalListScreen";
 import { ProposalDetailScreen } from "./screens/ProposalDetailScreen";
 import { CreateProposalScreen } from "./screens/CreateProposalScreen";
 import { JoinRequestScreen } from "./screens/JoinRequestScreen";
+import { NotificationScreen } from "./screens/NotificationScreen";
 import { apiClient } from "./config/api";
 import { authService } from "./services/authService";
 import { profileService } from "./services/profileService";
+import { notificationService } from "./services/notificationService";
 import { formatAddress } from "./utils/formatters";
 import { GridScan } from "./components/GridScan";
+import { useWebSocket } from "./hooks/useWebSocket";
 
-type Screen = 'login' | 'nickname' | 'explorer' | 'my-community' | 'profile' | 'create-community' | 'community-detail' | 'proposal-list' | 'proposal-detail' | 'create-proposal' | 'join-request';
+type Screen = 'login' | 'nickname' | 'explorer' | 'my-community' | 'profile' | 'create-community' | 'community-detail' | 'proposal-list' | 'proposal-detail' | 'create-proposal' | 'join-request' | 'notifications';
 
 function App() {
   const currentAccount = useCurrentAccount();
@@ -33,6 +36,73 @@ function App() {
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   const [joinRequestCommunityId, setJoinRequestCommunityId] = useState<string | null>(null);
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
+  const [proposalListRefreshKey, setProposalListRefreshKey] = useState(0);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+
+  // WebSocket for real-time updates
+  const { isConnected: isWebSocketConnected } = useWebSocket({
+    enabled: !!currentAccount && currentScreen !== 'login' && currentScreen !== 'nickname',
+    onProposalCreated: (data) => {
+      console.log('[App] Real-time: Proposal created', data);
+      // Refresh proposal list if we're on that screen
+      if (currentScreen === 'proposal-list' && data.commityId === selectedCommunityId) {
+        setProposalListRefreshKey(prev => prev + 1);
+      }
+      // Refresh notification count
+      if (currentAccount) {
+        notificationService.getUnreadCount(currentAccount.address).then((response) => {
+          if (response.success && response.data) {
+            setUnreadNotificationCount(response.data.unreadCount || 0);
+          }
+        });
+      }
+    },
+    onVoteCasted: (data) => {
+      console.log('[App] Real-time: Vote casted', data);
+      // Refresh proposal detail if we're viewing that proposal
+      if (currentScreen === 'proposal-detail' && data.proposalId === selectedProposalId) {
+        setProposalListRefreshKey(prev => prev + 1);
+      }
+      // Refresh proposal list
+      if (currentScreen === 'proposal-list') {
+        setProposalListRefreshKey(prev => prev + 1);
+      }
+      // Refresh notification count
+      if (currentAccount) {
+        notificationService.getUnreadCount(currentAccount.address).then((response) => {
+          if (response.success && response.data) {
+            setUnreadNotificationCount(response.data.unreadCount || 0);
+          }
+        });
+      }
+    },
+    onProposalFinalized: (data) => {
+      console.log('[App] Real-time: Proposal finalized', data);
+      // Refresh proposal list
+      if (currentScreen === 'proposal-list') {
+        setProposalListRefreshKey(prev => prev + 1);
+      }
+      // Refresh proposal detail if we're viewing that proposal
+      if (currentScreen === 'proposal-detail' && data.proposalId === selectedProposalId) {
+        setProposalListRefreshKey(prev => prev + 1);
+      }
+      // Refresh notification count
+      if (currentAccount) {
+        notificationService.getUnreadCount(currentAccount.address).then((response) => {
+          if (response.success && response.data) {
+            setUnreadNotificationCount(response.data.unreadCount || 0);
+          }
+        });
+      }
+    },
+    onNotification: (data) => {
+      console.log('[App] Real-time: Notification', data);
+      // Update notification count if it's for current user
+      if (currentAccount && data.address === currentAccount.address) {
+        setUnreadNotificationCount(prev => prev + 1);
+      }
+    },
+  });
 
   const handleDisconnect = async () => {
     setShowDisconnectMenu(false);
@@ -211,6 +281,28 @@ function App() {
     };
 
     checkAuth();
+  }, [currentAccount]);
+
+  // Load notification count
+  useEffect(() => {
+    const loadNotificationCount = async () => {
+    if (currentAccount) {
+        try {
+          const response = await notificationService.getUnreadCount(currentAccount.address);
+          if (response.success && response.data) {
+            setUnreadNotificationCount(response.data.unreadCount || 0);
+          }
+        } catch (error) {
+          // Silent fail
+      }
+    } else {
+        setUnreadNotificationCount(0);
+      }
+    };
+
+    loadNotificationCount();
+    const interval = setInterval(loadNotificationCount, 15000);
+    return () => clearInterval(interval);
   }, [currentAccount]);
 
   React.useEffect(() => {
@@ -425,6 +517,44 @@ function App() {
                 }}
               >
                 Profil
+              </Button>
+              <Button
+                variant="soft"
+                onClick={() => setCurrentScreen('notifications')}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  color: 'rgba(255, 255, 255, 0.95)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: '10px',
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.875rem',
+                  position: 'relative',
+                  transition: 'all 0.2s ease',
+                  cursor: 'pointer',
+                }}
+              >
+                🔔
+                {unreadNotificationCount > 0 && (
+                  <Box
+                    style={{
+                      position: 'absolute',
+                      top: '-4px',
+                      right: '-4px',
+                      background: 'rgba(236, 72, 153, 0.9)',
+                      color: 'white',
+                      borderRadius: '50%',
+                      width: '18px',
+                      height: '18px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                  </Box>
+                )}
               </Button>
             </Flex>
 
@@ -921,6 +1051,7 @@ function App() {
                   onClick={(e) => e.stopPropagation()}
                 >
                   <ProposalListScreen
+                    key={proposalListRefreshKey}
                     communityId={selectedCommunityId}
                     onCreateProposal={() => {
                       setCurrentScreen('create-proposal');
@@ -930,6 +1061,65 @@ function App() {
                       setCurrentScreen('proposal-detail');
                     }}
                     onBack={() => {
+                      setCurrentScreen('community-detail');
+                    }}
+                  />
+                </Box>
+              </Box>
+            )}
+
+            {/* Notification Screen */}
+            {currentScreen === 'notifications' && (
+              <Box
+                style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: 'rgba(0, 0, 0, 0.8)',
+                  backdropFilter: 'blur(10px)',
+                  zIndex: 1000,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '2rem',
+                }}
+                onClick={() => {
+                  setCurrentScreen('explorer');
+                }}
+              >
+                <Box
+                  style={{
+                    background: 'rgba(0, 0, 0, 0.95)',
+                    borderRadius: '20px',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    width: '100%',
+                    maxWidth: '900px',
+                    maxHeight: '90vh',
+                    overflowY: 'auto',
+                    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <NotificationScreen
+                    onBack={() => {
+                      setCurrentScreen('explorer');
+                      // Refresh notification count
+                      if (currentAccount) {
+                        notificationService.getUnreadCount(currentAccount.address).then((response) => {
+                          if (response.success && response.data) {
+                            setUnreadNotificationCount(response.data.unreadCount || 0);
+                          }
+                        });
+                      }
+                    }}
+                    onProposalClick={(proposalId) => {
+                      setSelectedProposalId(proposalId);
+                      setCurrentScreen('proposal-detail');
+                    }}
+                    onCommunityClick={(communityId) => {
+                      setSelectedCommunityId(communityId);
                       setCurrentScreen('community-detail');
                     }}
                   />
@@ -1023,7 +1213,11 @@ function App() {
                       setCurrentScreen('proposal-list');
                     }}
                     onCreated={() => {
-                      setCurrentScreen('proposal-list');
+                      // Wait a bit for transaction to be indexed, then refresh
+                      setTimeout(() => {
+                        setProposalListRefreshKey(prev => prev + 1);
+                        setCurrentScreen('proposal-list');
+                      }, 3000);
                     }}
                   />
                 </Box>

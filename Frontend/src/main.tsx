@@ -17,11 +17,15 @@ import { ENOKI_CONFIG } from "./config/enoki";
 const queryClient = new QueryClient();
 
 const createClient = () => {
-  const client = new SuiClient({
+  const baseClient = new SuiClient({
     url: "https://fullnode.testnet.sui.io:443",
   });
-  console.log('[createClient] ✅ SuiClient created with URL:', client.url || "https://fullnode.testnet.sui.io:443");
-  return client;
+  console.log('[createClient] ✅ SuiClient created with URL:', baseClient.url || "https://fullnode.testnet.sui.io:443");
+  
+  // Add Seal and Walrus extensions for messaging SDK
+  // Note: Messaging SDK will handle Seal and Walrus extensions internally
+  // We just return the base client, extensions will be added by messaging service
+  return baseClient;
 }
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

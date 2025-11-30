@@ -105,9 +105,10 @@ public entry fun create_proposal(
     description: String,
     deadline: u64,
     quorum_threshold: u64,
+    is_join_request: bool,
     ctx: &mut TxContext
 ) {
-    proposal::create(commity, message_id, title, description, deadline, quorum_threshold, ctx);
+    proposal::create(commity, message_id, title, description, deadline, quorum_threshold, is_join_request, ctx);
 }
 
 
@@ -137,12 +138,30 @@ public entry fun cast_vote(
 }
 
 /// Finalize a proposal and calculate result
+/// If proposal is a join request and passed, automatically join the creator
 #[allow(lint(public_entry))]
 public entry fun finalize_proposal(
+    creator_profile: &mut Profile,
     proposal: &mut Proposal,
+    commity: &mut Commity,
     clock: &Clock
 ) {
     proposal::finalize(proposal, clock);
+    
+    // Auto-join creator if proposal is a join request and passed
+    let proposal_status = proposal::status(proposal);
+    // STATUS_PASSED = 1
+    if (proposal_status == 1 && proposal::is_join_request(proposal)) {
+        let creator = proposal::creator(proposal);
+        // Verify that the caller owns the creator profile
+        assert!(profile::is_owner(creator_profile, creator), 4);
+        // Check if creator is not already a member
+        if (!commity::is_member(commity, creator)) {
+            commity::add_member(commity, creator);
+            let commity_id = commity::id(commity);
+            profile::init_member_stats(creator_profile, commity_id);
+        };
+    };
 }
 
 /// Update proposal status if expired

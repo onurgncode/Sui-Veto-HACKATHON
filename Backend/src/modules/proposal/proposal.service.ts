@@ -38,6 +38,7 @@ export class ProposalService {
         totalVoters: Number(data.total_voters) || 0,
         status: (Number(data.status) as ProposalStatus) || ProposalStatus.ACTIVE,
         quorumThreshold: Number(data.quorum_threshold) || 0,
+        isJoinRequest: Boolean(data.is_join_request) || false,
       };
 
       return proposal;
@@ -51,13 +52,35 @@ export class ProposalService {
     try {
       logger.info(`Fetching proposals for community: ${commityId}`);
 
-      // Note: This requires indexing or querying all proposals
-      // For now, return empty array - will be implemented with Surflux indexing
-      logger.warn(
-        'getProposalsByCommunity: Requires Surflux indexing for efficient querying'
-      );
+      const proposalObjects = await this.objectFetcher.getProposalsByCommunity(commityId);
 
-      return [];
+      const proposals: Proposal[] = [];
+
+      for (const proposalObject of proposalObjects) {
+        const data = proposalObject.data;
+
+        const proposal: Proposal = {
+          id: proposalObject.objectId,
+          commityId: (data.commity_id as string) || '',
+          messageId: (data.message_id as string) || '',
+          creator: (data.creator as string) || '',
+          title: (data.title as string) || '',
+          description: (data.description as string) || '',
+          deadline: Number(data.deadline) || 0,
+          yesVotes: Number(data.yes_votes) || 0,
+          noVotes: Number(data.no_votes) || 0,
+          abstainVotes: Number(data.abstain_votes) || 0,
+          totalVoters: Number(data.total_voters) || 0,
+          status: (Number(data.status) as ProposalStatus) || ProposalStatus.ACTIVE,
+          quorumThreshold: Number(data.quorum_threshold) || 0,
+          isJoinRequest: Boolean(data.is_join_request) || false,
+        };
+
+        proposals.push(proposal);
+      }
+
+      logger.info(`Found ${proposals.length} proposals for community ${commityId}`);
+      return proposals;
     } catch (error) {
       logger.error('Error getting proposals:', error);
       throw error;
@@ -109,6 +132,7 @@ export class ProposalService {
     description: string;
     deadline: number;
     quorumThreshold: number;
+    isJoinRequest: boolean;
   }): Promise<{
     transactionBlock: string;
   }> {
@@ -151,12 +175,18 @@ export class ProposalService {
     }
   }
 
-  async finalizeProposalTransaction(proposalId: string): Promise<{
+  async finalizeProposalTransaction(
+    proposalId: string,
+    creatorProfileId: string,
+    commityId: string
+  ): Promise<{
     transactionBlock: string;
   }> {
     try {
       const tx = this.transactionBuilder.buildFinalizeProposalTransaction(
-        proposalId
+        proposalId,
+        creatorProfileId,
+        commityId
       );
       const serialized = tx.serialize();
 

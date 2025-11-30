@@ -451,6 +451,189 @@ Response: { success: true, data: { read: number } }
 - Sui wallet signature verification
 - Nonce-based authentication
 
+## 🐛 Troubleshooting
+
+### Common Issues
+
+#### 1. Surflux API Key Errors (401 - invalid_api_key)
+
+**Error Message:**
+```
+Surflux REST API error: 401 - {"error":"invalid_api_key"}
+Surflux GraphQL API error: 401 - {"error":"invalid_api_key"}
+```
+
+**Causes:**
+- Invalid or expired Surflux API key
+- Missing `SURFLUX_API_KEY` environment variable
+- Incorrect API key format
+- API key not properly configured in `.env` file
+
+**Solutions:**
+
+1. **Verify API Key in Environment Variables:**
+   ```bash
+   # Check if SURFLUX_API_KEY is set
+   echo $SURFLUX_API_KEY
+   
+   # Or check .env file
+   cat .env | grep SURFLUX_API_KEY
+   ```
+
+2. **Update .env File:**
+   ```bash
+   # Add or update SURFLUX_API_KEY in .env
+   SURFLUX_API_KEY=your-valid-api-key-here
+   SURFLUX_FLUX_STREAM_NAME=your-flux-stream-name
+   ```
+
+3. **Verify API Key Format:**
+   - Surflux API keys should be in UUID format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
+   - Ensure there are no extra spaces or quotes around the key
+
+4. **Check Surflux Dashboard:**
+   - Log in to Surflux dashboard
+   - Verify your API key is active and not expired
+   - Regenerate API key if necessary
+
+5. **Fallback Behavior:**
+   - The system automatically falls back to transaction-based queries when Surflux fails
+   - This ensures the application continues to work even without Surflux indexing
+   - Check logs for: `"Surflux indexing failed, falling back to transaction query"`
+
+**Configuration Location:**
+- File: `Backend/src/config/surflux.ts`
+- Environment Variable: `SURFLUX_API_KEY`
+- Default Value: `fc664ac9-caa6-4123-96ca-e564c569d910` (if not set)
+
+**Related Logs:**
+```
+[error]: Surflux REST API error: 401 - {"error":"invalid_api_key"}
+[error]: Surflux GraphQL API error: 401 - {"error":"invalid_api_key"}
+[warn]: REST API failed, trying GraphQL: Surflux REST API error: 401
+[warn]: Surflux indexing failed, falling back to transaction query
+[info]: Fetching proposals from transactions (fallback method) for community: 0x...
+```
+
+**Note:** When Surflux API key is invalid, the system automatically falls back to transaction-based queries. This ensures the application continues to work, but indexing performance may be slower.
+
+#### 2. Sponsor Gas Service Errors
+
+**Error: "SPONSOR_PRIVATE_KEY not found in environment variables"**
+
+**Solution:**
+```bash
+# Generate sponsor key
+cd Backend
+npm run generate-sponsor-key
+
+# Add to .env
+SPONSOR_PRIVATE_KEY=<generated-key>
+```
+
+**Error: "No valid gas coins found for the transaction"**
+
+**Solution:**
+- Fund the sponsor address with SUI:
+  ```bash
+  sui client transfer-sui --amount 1000000000 --to <SPONSOR_ADDRESS>
+  ```
+
+#### 3. Rate Limiting (429 - Too Many Requests)
+
+**Error Message:**
+```
+Unexpected status code: 429
+Too Many Requests
+```
+
+**Solutions:**
+- The system includes automatic retry with exponential backoff
+- Rate limits are increased in development mode (1000 requests)
+- Critical endpoints (`/health`, `/api/profile/:address`) are exempt from rate limiting
+
+#### 4. Transaction Build Errors
+
+**Error: "Missing transaction sender"**
+
+**Solution:**
+- Ensure `tx.setSender(address)` is called before building transaction
+- For ZkLogin wallets, use `useSignAndExecuteTransaction` hook instead
+
+**Error: "Invalid type: Expected Object but received string"**
+
+**Solution:**
+- When using `setGasPayment`, wrap coin IDs with `tx.object(coinId)`
+- Example: `tx.setGasPayment([tx.object(coinId)])`
+
+**Error: "At path: digest -- Expected a string, but received: undefined"**
+
+**Solution:**
+- This error occurs when `setGasPayment` is used incorrectly with `TransactionBlock`
+- For sponsor gas, only `setGasOwner` is needed - `setGasPayment` is not required
+- The sponsor's gas coins will be automatically selected by the Sui network
+
+#### 5. ZkLogin Wallet Signing Errors
+
+**Error: "Sign transaction feature not available"**
+
+**Solution:**
+- ZkLogin wallets (Enoki) don't support `signTransactionBlock` feature directly
+- Use `useSignAndExecuteTransaction` hook instead for ZkLogin wallets
+- The system automatically detects ZkLogin wallets and uses the appropriate signing method
+
+**Error: "Cross-Origin-Opener-Policy policy would block the window.closed call"**
+
+**Solution:**
+- This is a warning from Enoki SDK, not a critical error
+- The application continues to work despite this warning
+- Can be ignored or fixed by adding COOP header in Vite config (optional)
+
+#### 6. Proposal Fetching Issues
+
+**Error: "Found 0 proposals for community" (but proposals exist)**
+
+**Causes:**
+- Surflux indexing not working (invalid API key)
+- Transaction query fallback not finding proposals
+- Proposal transaction parsing issues
+- Proposal was created with different `commityId` than expected
+
+**Solutions:**
+
+1. **Fix Surflux API Key:**
+   - See Issue #1 above for Surflux API key configuration
+   - Once fixed, Surflux indexing will work and proposals will be found
+
+2. **Check Transaction Query Fallback:**
+   - The system falls back to transaction queries when Surflux fails
+   - Verify proposal transactions exist on-chain:
+     ```bash
+     sui client transaction <transaction-digest>
+     ```
+
+3. **Verify Proposal Structure:**
+   - Check that proposals were created with correct `commityId`
+   - Verify proposal transaction includes all required fields
+   - Check transaction parsing logic in `suiObjectFetcher.ts`
+
+4. **Check Logs:**
+   ```
+   [info]: Proposal transaction query page 1: Found 1 transactions
+   [info]: Found 0 proposals for community 0x... from transactions
+   ```
+   - If transactions are found but proposals are not, check parsing logic
+   - Verify `commityId` filter is working correctly
+
+**Related Logs:**
+```
+[error]: Error fetching proposals from Surflux: Surflux GraphQL API error: 401
+[warn]: Surflux indexing failed, falling back to transaction query
+[info]: Fetching proposals from transactions (fallback method) for community: 0x...
+[info]: Proposal transaction query page 1: Found 1 transactions
+[info]: Found 0 proposals for community 0x... from transactions
+```
+
 ## 📝 License
 
 MIT

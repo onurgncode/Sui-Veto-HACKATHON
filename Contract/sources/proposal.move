@@ -30,6 +30,7 @@ public struct Proposal has key {
     total_voters: u64,
     status: u8,
     quorum_threshold: u64,
+    is_join_request: bool,
 }
 
 /// Create a new proposal
@@ -41,6 +42,7 @@ public entry fun create(
     description: String,
     deadline: u64,
     quorum_threshold: u64,
+    is_join_request: bool,
     ctx: &mut TxContext
 ) {
     let sender = tx_context::sender(ctx);
@@ -60,6 +62,7 @@ public entry fun create(
         total_voters: 0,
         status: STATUS_ACTIVE,
         quorum_threshold,
+        is_join_request,
     };
     transfer::share_object(proposal);
 }
@@ -121,6 +124,11 @@ public fun total_voters(proposal: &Proposal): u64 {
     proposal.total_voters
 }
 
+/// Get is_join_request flag
+public fun is_join_request(proposal: &Proposal): bool {
+    proposal.is_join_request
+}
+
 /// Cast a vote on a proposal
 public fun cast_vote(
     proposal: &mut Proposal,
@@ -165,10 +173,22 @@ public fun finalize(proposal: &mut Proposal, clock: &Clock) {
     let current_time = clock::timestamp_ms(clock);
     assert!(current_time >= proposal.deadline, 0);
     assert!(proposal.status == STATUS_ACTIVE, 1);
+    // For join requests: if no votes, consider it passed (default approval)
+    // For regular proposals: if no votes, consider it failed
+    if (proposal.is_join_request) {
+        // Join request: pass if yes_votes >= no_votes (including 0-0 case)
+        if (proposal.yes_votes >= proposal.no_votes) {
+            proposal.status = STATUS_PASSED;
+        } else {
+            proposal.status = STATUS_FAILED;
+        };
+    } else {
+        // Regular proposal: pass only if yes_votes > no_votes
     if (proposal.yes_votes > proposal.no_votes) {
         proposal.status = STATUS_PASSED;
     } else {
         proposal.status = STATUS_FAILED;
+        };
     };
 }
 

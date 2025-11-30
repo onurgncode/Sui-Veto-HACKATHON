@@ -73,6 +73,7 @@ export class TransactionBuilderService {
     description: string;
     deadline: number;
     quorumThreshold: number;
+    isJoinRequest: boolean;
   }): TransactionBlock {
     const tx = new TransactionBlock();
     
@@ -88,6 +89,7 @@ export class TransactionBuilderService {
         tx.pure.string(data.description),
         tx.pure.u64(data.deadline),
         tx.pure.u64(data.quorumThreshold),
+        tx.pure.bool(data.isJoinRequest),
       ],
     });
 
@@ -131,15 +133,21 @@ export class TransactionBuilderService {
   /**
    * Build a transaction block for finalizing a proposal
    */
-  buildFinalizeProposalTransaction(proposalId: string): TransactionBlock {
+  buildFinalizeProposalTransaction(
+    proposalId: string,
+    creatorProfileId: string,
+    commityId: string
+  ): TransactionBlock {
     const tx = new TransactionBlock();
     
+    const creatorProfile = tx.object(creatorProfileId);
     const proposal = tx.object(proposalId);
+    const commity = tx.object(commityId);
     const clock = tx.object('0x6'); // Clock object ID
 
     tx.moveCall({
       target: `${this.packageId}::dao_app::finalize_proposal`,
-      arguments: [proposal, clock],
+      arguments: [creatorProfile, proposal, commity, clock],
     });
 
     logger.info(`Built finalize_proposal transaction: ${proposalId}`);

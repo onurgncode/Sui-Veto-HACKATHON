@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
-import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { useCurrentAccount, useWallets, useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { Box, Flex, Heading, Text, Button, TextField } from "@radix-ui/themes";
 import { profileService } from "../services/profileService";
 import { apiClient } from "../config/api";
+import { toB64 } from "@mysten/bcs";
+import { fromB64 } from "@mysten/sui/utils";
 import { Transaction } from "@mysten/sui/transactions";
 
 interface NicknameScreenProps {
@@ -17,7 +19,9 @@ export function NicknameScreen({ nickname, onNicknameSet }: NicknameScreenProps)
   const [error, setError] = useState<string | null>(null);
   const [hasProfile, setHasProfile] = useState(false);
   const currentAccount = useCurrentAccount();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const wallets = useWallets();
+  const suiClient = useSuiClient();
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
   // Profile kontrolü - Eğer profile varsa bu ekran gösterilmemeli
   useEffect(() => {
@@ -92,83 +96,270 @@ export function NicknameScreen({ nickname, onNicknameSet }: NicknameScreenProps)
     setError(null);
 
     try {
-      if (currentAccount) {
-        // PACKAGE_ID'yi environment variable'dan al veya default değer kullan
-        const packageId = import.meta.env.VITE_PACKAGE_ID || '0x115bbd92212fbab8f1408a5d12e697a410fae1dafc171a61bfe5ded4554a1f45';
+      if (!currentAccount?.address) {
+        throw new Error('Wallet address not available');
+      }
+
+      const packageId = import.meta.env.VITE_PACKAGE_ID || '0x6b30552018493c6daaef95c7a1956aca5adc1528513a7bc0d831cd9b136a8f90';
+      
+      // Get the connected wallet
+      const connectedWallet = wallets.find(w => w.accounts.length > 0);
+      if (!connectedWallet || !currentAccount) {
+        throw new Error('No connected wallet found');
+      }
+      
+      // Check if this is a ZkLogin wallet (Enoki)
+      const isZkLogin = connectedWallet?.name?.toLowerCase().includes('enoki') || 
+                        connectedWallet?.name?.toLowerCase().includes('zklogin') ||
+                        currentAccount?.label?.toLowerCase().includes('enoki') ||
+                        currentAccount?.label?.toLowerCase().includes('zklogin') ||
+                        !connectedWallet.features['sui:signTransactionBlock']; // Fallback: if feature not available, assume ZkLogin
+      
+      console.log('[NicknameScreen] Wallet type:', isZkLogin ? 'ZkLogin' : 'Standard');
+      console.log('[NicknameScreen] Wallet name:', connectedWallet?.name);
+      console.log('[NicknameScreen] Account label:', currentAccount?.label);
+      console.log('[NicknameScreen] Has signTransactionBlock feature:', !!connectedWallet.features['sui:signTransactionBlock']);
+
+      if (isZkLogin) {
+        // ZkLogin wallet için: Enoki'nin sponsored transactions API'sini kullan
+        // ZkLogin wallet'ları signTransactionBlock desteklemez, bu yüzden Enoki API kullanıyoruz
+        console.log('[NicknameScreen] Using ZkLogin flow with Enoki sponsored transactions API');
         
-        // Frontend'de transaction'ı direkt oluştur
+        // Build transaction kind (onlyTransactionKind: true) for Enoki API
         const tx = new Transaction();
+        tx.setSender(currentAccount.address);
         tx.moveCall({
           target: `${packageId}::dao_app::create_profile`,
           arguments: [tx.pure.string(inputNickname.trim())],
         });
         
-        signAndExecute(
-          {
-            transaction: tx,
-          },
-          {
-            onSuccess: async (result) => {
-              console.log('Profile created successfully:', result);
+        // Build transaction kind bytes (onlyTransactionKind: true)
+        const kindBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
+        const kindBytesBase64 = toB64(kindBytes);
+        
+        // Try to get JWT token from localStorage (Enoki stores it there)
+        let zkLoginJwt: string | undefined;
+        try {
+          const possibleKeys = [
+            'enoki:session:testnet',
+            'enoki:session',
+            `enoki:session:${currentAccount.address}`,
+          ];
+          for (const key of possibleKeys) {
+            const stored = localStorage.getItem(key);
+            if (stored) {
+              try {
+                const parsed = JSON.parse(stored);
+                if (parsed.jwt || parsed.token) {
+                  zkLoginJwt = parsed.jwt || parsed.token;
+                  console.log('[NicknameScreen] Found JWT token in localStorage:', key);
+                  break;
+                }
+              } catch {
+                if (stored.startsWith('eyJ')) {
+                  zkLoginJwt = stored;
+                  console.log('[NicknameScreen] Found JWT token as direct string:', key);
+                  break;
+                }
+              }
+            }
+          }
+        } catch (jwtError) {
+          console.warn('[NicknameScreen] Could not get JWT token:', jwtError);
+        }
+
+        // Step 1: Sponsor transaction via Enoki API
+        console.log('[NicknameScreen] Step 1: Sponsoring transaction via Enoki API...');
+        const sponsorResponse = await profileService.enokiSponsorTransaction(
+          kindBytesBase64,
+          currentAccount.address,
+          zkLoginJwt
+        );
+        
+        if (!sponsorResponse.success || !sponsorResponse.data) {
+          throw new Error(sponsorResponse.error || 'Failed to sponsor transaction via Enoki');
+        }
+        
+        const { digest } = sponsorResponse.data;
+        console.log('[NicknameScreen] ✅ Transaction sponsored, digest:', digest);
+
+        // Step 2: ZkLogin wallet'ları signTransactionBlock desteklemediği için
+        // Enoki'nin otomatik sponsor gas'ını kullanmak için useSignAndExecuteTransaction kullanıyoruz
+        // Enoki wallet'ları registerEnokiWallets ile API key ile kayıtlı olduğu için
+        // useSignAndExecuteTransaction otomatik olarak Enoki'nin sponsor gas'ını kullanmalı
+        console.log('[NicknameScreen] Step 2: Using Enoki automatic sponsor gas via useSignAndExecuteTransaction...');
+        
+        const newTx = new Transaction();
+        newTx.setSender(currentAccount.address);
+        newTx.moveCall({
+          target: `${packageId}::dao_app::create_profile`,
+          arguments: [newTx.pure.string(inputNickname.trim())],
+        });
+        
+        try {
+          // useSignAndExecuteTransaction should automatically use Enoki's sponsor gas
+          // if the wallet is an Enoki wallet and the contract is in the allow-list
+          // Explicitly pass currentAccount to ensure correct account is used
+          console.log('[NicknameScreen] Current account address:', currentAccount.address);
+          await signAndExecute({
+            transaction: newTx,
+            account: currentAccount, // Explicitly use currentAccount
+          });
+          console.log('[NicknameScreen] ✅ Profile created with ZkLogin wallet (Enoki automatic sponsor gas)');
+        } catch (error: any) {
+          // If "No valid gas coins found" error, it means Enoki's automatic sponsor gas didn't work
+          if (error?.message?.includes('No valid gas coins') || error?.message?.includes('gas coins')) {
+            throw new Error('ZkLogin wallet does not have gas coins. Enoki automatic sponsor gas is not working. Please check Enoki dashboard settings and ensure the contract is in the allow-list.');
+          }
+          throw error;
+        }
+        
               setIsLoading(false);
               
-              // Transaction başarılı olduktan sonra, on-chain'den profile'ı yükle
-              // Retry mekanizması ile profile'ın on-chain'de görünmesini bekliyoruz
+        // Retry logic to check profile on-chain
               let retryCount = 0;
-              const maxRetries = 15; // 15 saniye kadar bekle
-              const retryDelay = 1000; // 1 saniye
+        const maxRetries = 15;
+        const retryDelay = 1000;
               
               const checkProfile = async (): Promise<void> => {
                 try {
                   const profileResponse = await profileService.getProfile(currentAccount.address);
                   if (profileResponse.success && profileResponse.data) {
                     const profile = (profileResponse.data as any).profile || profileResponse.data;
-                    // Profile objesi varsa (id varsa), profile bulundu demektir
                     if (profile && profile.id) {
-                      // Profile objesi bulundu, nickname'i set et ve explorer'a geç
                       const savedNickname = profile?.nickname || inputNickname.trim();
-                      console.log('Profile found on-chain:', profile);
+                console.log('[NicknameScreen] Profile found on-chain:', profile);
                       onNicknameSet(savedNickname);
                       return;
                     }
                   }
                   
-                  // Profile henüz görünmüyor, tekrar dene
                   retryCount++;
-                  console.log(`Profile not found yet, retry ${retryCount}/${maxRetries}`);
                   if (retryCount < maxRetries) {
                     setTimeout(checkProfile, retryDelay);
                   } else {
-                    // Max retry'ye ulaşıldı, yine de devam et (transaction başarılı oldu)
-                    console.warn('Profile not found after max retries, continuing anyway');
+              console.warn('[NicknameScreen] Profile not found after max retries, continuing anyway');
                     onNicknameSet(inputNickname.trim());
                   }
                 } catch (error) {
-                  console.error('Error loading created profile:', error);
+            console.error('[NicknameScreen] Error loading created profile:', error);
                   retryCount++;
                   if (retryCount < maxRetries) {
                     setTimeout(checkProfile, retryDelay);
                   } else {
-                    // Max retry'ye ulaşıldı, yine de devam et
-                    console.warn('Max retries reached, continuing anyway');
+              console.warn('[NicknameScreen] Max retries reached, continuing anyway');
                     onNicknameSet(inputNickname.trim());
                   }
                 }
               };
               
-              // İlk kontrolü 1 saniye sonra başlat (transaction'ın onaylanması için)
               setTimeout(checkProfile, 1000);
-            },
-            onError: (error) => {
-              console.error('Transaction execution failed:', error);
-              setError('Transaction başarısız oldu. Lütfen tekrar deneyin.');
-              setIsLoading(false);
-            },
-          }
-        );
       } else {
+        // Standard wallet için: Backend'de build et, frontend'de imzala
+        console.log('[NicknameScreen] Using Standard wallet flow with backend build');
+        
+        const moveCallTarget = `${packageId}::dao_app::create_profile`;
+        const moveCallArgs = [
+          { type: 'string', value: inputNickname.trim() },
+        ];
+        
+        // Build transaction on backend (avoids CORS issues)
+        let builtTx: Uint8Array;
+        try {
+          const buildResponse = await profileService.buildSponsoredTransaction(
+            currentAccount.address,
+            moveCallTarget,
+            moveCallArgs
+          );
+          
+          if (!buildResponse.success || !buildResponse.data) {
+            throw new Error(buildResponse.error || 'Failed to build sponsored transaction');
+          }
+          
+          // Decode base64 transaction block
+          builtTx = fromB64(buildResponse.data.transactionBlock);
+          console.log('[NicknameScreen] ✅ Transaction built successfully on backend with sponsor gas');
+        } catch (buildError: any) {
+          console.error('[NicknameScreen] Transaction build error:', buildError);
+          setError('Transaction oluşturulamadı. Lütfen tekrar deneyin.');
+              setIsLoading(false);
+          return;
+        }
+        
+        // Sign the full transaction
+        try {
+          // Check if signTransactionBlock feature is available
+          const signFeature = connectedWallet.features['sui:signTransactionBlock'];
+          if (!signFeature) {
+            throw new Error('Sign transaction feature not available');
+          }
+          
+          // Sign the transaction
+          const account = currentAccount; // TypeScript narrowing
+          const signResult = await signFeature.signTransactionBlock({
+            transactionBlock: builtTx as any,
+            account: account,
+            chain: (account.chains && account.chains[0]) || 'sui:testnet',
+          });
+          const signature = signResult.signature;
+          
+          // Send to backend for sponsor gas execution
+          const sponsorResult = await profileService.sponsorCreateProfile(
+            inputNickname.trim(),
+            toB64(builtTx),
+            signature
+          );
+          
+          if (!sponsorResult.success) {
+            throw new Error(sponsorResult.error || 'Sponsor gas failed');
+          }
+          
+          console.log('[NicknameScreen] Profile created with sponsored gas:', sponsorResult.data);
+          setIsLoading(false);
+          
+          // Retry logic to check profile on-chain
+          let retryCount = 0;
+          const maxRetries = 15;
+          const retryDelay = 1000;
+          
+          const checkProfile = async (): Promise<void> => {
+            try {
+              const profileResponse = await profileService.getProfile(currentAccount.address);
+              if (profileResponse.success && profileResponse.data) {
+                const profile = (profileResponse.data as any).profile || profileResponse.data;
+                if (profile && profile.id) {
+                  const savedNickname = profile?.nickname || inputNickname.trim();
+                  console.log('[NicknameScreen] Profile found on-chain:', profile);
+                  onNicknameSet(savedNickname);
+                  return;
+                }
+              }
+              
+              retryCount++;
+              if (retryCount < maxRetries) {
+                setTimeout(checkProfile, retryDelay);
+              } else {
+                console.warn('[NicknameScreen] Profile not found after max retries, continuing anyway');
+                onNicknameSet(inputNickname.trim());
+              }
+            } catch (error) {
+              console.error('[NicknameScreen] Error loading created profile:', error);
+              retryCount++;
+              if (retryCount < maxRetries) {
+                setTimeout(checkProfile, retryDelay);
+      } else {
+                console.warn('[NicknameScreen] Max retries reached, continuing anyway');
         onNicknameSet(inputNickname.trim());
+              }
+            }
+          };
+          
+          setTimeout(checkProfile, 1000);
+        } catch (error: any) {
+          console.error('[NicknameScreen] Error signing or executing transaction:', error);
+          setError(error?.message || 'Transaction başarısız oldu. Lütfen tekrar deneyin.');
         setIsLoading(false);
+        }
       }
     } catch (error) {
       console.error('Failed to create profile:', error);

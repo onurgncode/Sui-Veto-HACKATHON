@@ -22,6 +22,7 @@ export interface Proposal {
   totalVoters: number;
   status: ProposalStatus;
   quorumThreshold: number;
+  isJoinRequest: boolean;
 }
 
 export interface Vote {
@@ -38,6 +39,7 @@ export interface CreateProposalRequest {
   description: string;
   deadline: number;
   quorumThreshold: number;
+  isJoinRequest: boolean;
 }
 
 export interface VoteRequest {
@@ -72,8 +74,69 @@ export const proposalService = {
     return apiClient.get<{ votes: Vote[]; total: number }>(`/proposal/${proposalId}/votes`);
   },
 
-  async finalizeProposal(proposalId: string): Promise<ApiResponse<{ proposal: Proposal }>> {
-    return apiClient.post<{ proposal: Proposal }>(`/proposal/${proposalId}/finalize`);
+  async finalizeProposal(
+    proposalId: string,
+    creatorProfileId: string,
+    commityId: string
+  ): Promise<ApiResponse<{ proposal: Proposal }>> {
+    return apiClient.post<{ proposal: Proposal }>(`/proposal/${proposalId}/finalize`, {
+      creatorProfileId,
+      commityId,
+    });
+  },
+
+  /**
+   * Build sponsored transaction for creating proposal (join request)
+   */
+  async buildSponsoredCreateProposal(
+    sender: string,
+    moveCallTarget: string,
+    moveCallArgs: any[]
+  ): Promise<ApiResponse<{ transactionBlock: string }>> {
+    return apiClient.post<{ transactionBlock: string }>('/proposal/build-sponsored', {
+      sender,
+      moveCallTarget,
+      moveCallArgs,
+    });
+  },
+
+  /**
+   * Create proposal with sponsored gas
+   * User signs the transaction, backend sponsors the gas
+   */
+  async sponsorCreateProposal(
+    transactionBlock: string,
+    signature: string
+  ): Promise<ApiResponse<{ digest: string; effects: any; events: any; objectChanges: any }>> {
+    return apiClient.post<{ digest: string; effects: any; events: any; objectChanges: any }>(
+      '/proposal/sponsor-create',
+      {
+        transactionBlock,
+        signature,
+      }
+    );
+  },
+
+  /**
+   * Finalize proposal with sponsored gas
+   * User signs the transaction, backend sponsors the gas
+   */
+  async sponsorFinalizeProposal(
+    proposalId: string,
+    creatorProfileId: string,
+    commityId: string,
+    transactionBlock: string,
+    signature: string
+  ): Promise<ApiResponse<{ digest: string; effects: any; events: any; objectChanges: any }>> {
+    return apiClient.post<{ digest: string; effects: any; events: any; objectChanges: any }>(
+      `/proposal/${proposalId}/sponsor-finalize`,
+      {
+        creatorProfileId,
+        commityId,
+        transactionBlock,
+        signature,
+      }
+    );
   },
 };
 

@@ -1,18 +1,22 @@
+// Load environment variables FIRST, before any other imports
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import dotenv from 'dotenv';
+import { createServer } from 'http';
 import { logger } from './utils/logger';
 import { errorHandler } from './middleware/errorHandler';
 import { rateLimiter } from './middleware/rateLimiter';
 import apiRoutes from './routes';
 import { EventService } from './services/eventService';
-
-// Load environment variables
-dotenv.config();
+import { webSocketServer } from './services/websocketServer';
+import { surfluxPollingService } from './services/surfluxPollingService';
 
 const app = express();
+const server = createServer(app);
 const PORT = process.env.PORT || 3000;
 const eventService = new EventService();
 
@@ -69,8 +73,11 @@ app.use((req, res) => {
   });
 });
 
+// Initialize WebSocket server
+webSocketServer.initialize(server);
+
 // Start server and event service
-app.listen(PORT, async () => {
+server.listen(PORT, async () => {
   logger.info(`Server running on port ${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
@@ -80,11 +87,21 @@ app.listen(PORT, async () => {
   } catch (error) {
     logger.error('Failed to start event service:', error);
   }
+
+  // Start Surflux polling service
+  try {
+    surfluxPollingService.start();
+    logger.info('Surflux polling service started');
+  } catch (error) {
+    logger.error('Failed to start Surflux polling service:', error);
+  }
 });
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully...');
+  surfluxPollingService.stop();
+  webSocketServer.close();
   await eventService.stop();
   process.exit(0);
 });

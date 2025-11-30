@@ -201,11 +201,17 @@ export class SurfluxClient {
       orderDirection,
     });
 
-    const response = await fetch(`${SURFLUX_CONFIG.apiUrl}/api/v1/objects?${params.toString()}`, {
+    // Use base API URL for REST endpoint, flux stream is handled via API key
+    const apiEndpoint = `${SURFLUX_CONFIG.baseApiUrl}/api/v1/objects?${params.toString()}`;
+    
+    logger.info(`Surflux REST API request: ${apiEndpoint}`);
+
+    const response = await fetch(apiEndpoint, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${SURFLUX_CONFIG.apiKey}`,
         'Accept': 'application/json',
+        'X-Flux-Stream': SURFLUX_CONFIG.fluxStreamName || '',
       },
     });
 
@@ -221,10 +227,20 @@ export class SurfluxClient {
       throw new Error(`Surflux REST API error: ${response.status}`);
     }
 
-    const result = await response.json() as { data?: any[]; objects?: any[] };
+    const result = await response.json() as { data?: any[]; objects?: any[]; error?: any };
+    
+    if (result.error) {
+      logger.error(`Surflux REST API returned error: ${JSON.stringify(result.error)}`);
+      throw new Error(`Surflux REST API error: ${JSON.stringify(result.error)}`);
+    }
+    
     const objects = result.data || result.objects || [];
     
     logger.info(`Surflux REST returned ${objects.length} objects of type ${objectType}`);
+    
+    if (objects.length > 0) {
+      logger.debug(`First object sample: ${JSON.stringify(objects[0]).substring(0, 200)}...`);
+    }
     
     return this.normalizeSurfluxObjects(objects);
   }
@@ -268,11 +284,17 @@ export class SurfluxClient {
       orderDirection: orderDirection.toUpperCase(),
     };
 
-    const response = await fetch(`${SURFLUX_CONFIG.apiUrl}/graphql`, {
+    // Use base API URL for GraphQL endpoint
+    const apiEndpoint = `${SURFLUX_CONFIG.baseApiUrl}/graphql`;
+    
+    logger.info(`Surflux GraphQL API request: ${apiEndpoint}`);
+
+    const response = await fetch(apiEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${SURFLUX_CONFIG.apiKey}`,
+        'X-Flux-Stream': SURFLUX_CONFIG.fluxStreamName || '',
       },
       body: JSON.stringify({ query, variables }),
     });
@@ -302,6 +324,10 @@ export class SurfluxClient {
     const objects = result.data?.objects || [];
     logger.info(`Surflux GraphQL returned ${objects.length} objects of type ${objectType}`);
     
+    if (objects.length > 0) {
+      logger.debug(`First object sample: ${JSON.stringify(objects[0]).substring(0, 200)}...`);
+    }
+    
     return this.normalizeSurfluxObjects(objects);
   }
 
@@ -309,17 +335,30 @@ export class SurfluxClient {
    * Normalize Surflux objects to SurfluxObject format
    */
   private normalizeSurfluxObjects(objects: any[]): SurfluxObject[] {
-    return objects.map((obj: any) => ({
-      objectId: obj.objectId || obj.id,
-      type: obj.type,
-      packageId: obj.packageId || obj.package_id,
-      module: obj.module,
-      struct: obj.struct,
-      fields: typeof obj.fields === 'string' ? JSON.parse(obj.fields) : (obj.fields || {}),
-      owner: obj.owner || obj.owner_address,
-      createdAt: obj.createdAt || obj.created_at || Date.now(),
-      updatedAt: obj.updatedAt || obj.updated_at || Date.now(),
-    }));
+    return objects.map((obj: any) => {
+      try {
+        const normalized = {
+          objectId: obj.objectId || obj.id || obj.object_id,
+          type: obj.type || obj.object_type,
+          packageId: obj.packageId || obj.package_id,
+          module: obj.module,
+          struct: obj.struct,
+          fields: typeof obj.fields === 'string' ? JSON.parse(obj.fields) : (obj.fields || {}),
+          owner: obj.owner || obj.owner_address || obj.ownerAddress,
+          createdAt: obj.createdAt || obj.created_at || obj.createdAtTimestamp || Date.now(),
+          updatedAt: obj.updatedAt || obj.updated_at || obj.updatedAtTimestamp || Date.now(),
+        };
+        
+        if (!normalized.objectId) {
+          logger.warn(`Surflux object missing objectId: ${JSON.stringify(obj).substring(0, 200)}`);
+        }
+        
+        return normalized;
+      } catch (error) {
+        logger.error(`Error normalizing Surflux object: ${error}, object: ${JSON.stringify(obj).substring(0, 200)}`);
+        throw error;
+      }
+    });
   }
 
   /**

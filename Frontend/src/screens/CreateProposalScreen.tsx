@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import { Box, Flex, Heading, Text, Button, TextField } from "@radix-ui/themes";
-import { proposalService } from "../services/proposalService";
+import { Transaction } from "@mysten/sui/transactions";
 import { profileService } from "../services/profileService";
 
 interface CreateProposalScreenProps {
@@ -16,13 +16,26 @@ export function CreateProposalScreen({
   onCreated 
 }: CreateProposalScreenProps) {
   const currentAccount = useCurrentAccount();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [deadline, setDeadline] = useState('');
   const [quorumThreshold, setQuorumThreshold] = useState('50');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (currentAccount) {
+        const response = await profileService.getProfile(currentAccount.address);
+        if (response.success && response.data?.profile) {
+          setProfileId(response.data.profile.id);
+        }
+      }
+    };
+    loadProfile();
+  }, [currentAccount]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,9 +44,17 @@ export function CreateProposalScreen({
       return;
     }
 
-    const deadlineTimestamp = new Date(deadline).getTime();
-    if (deadlineTimestamp <= Date.now()) {
+    const deadlineDate = new Date(deadline);
+    const deadlineTimestamp = deadlineDate.getTime(); // Keep in milliseconds (contract expects milliseconds)
+    const nowTimestamp = Date.now();
+    
+    if (deadlineTimestamp <= nowTimestamp) {
       setError('Son tarih gelecekte bir tarih olmalıdır');
+      return;
+    }
+
+    if (!currentAccount || !profileId) {
+      setError('Wallet bağlantısı veya profil gerekli');
       return;
     }
 
@@ -41,45 +62,34 @@ export function CreateProposalScreen({
     setError(null);
 
     try {
-      // Get transaction from backend
-      const response = await proposalService.createProposal({
-        commityId: communityId,
-        messageId: '', // Can be empty for now
-        title: title.trim(),
-        description: description.trim(),
-        deadline: deadlineTimestamp,
-        quorumThreshold: parseInt(quorumThreshold, 10),
+      const packageId = import.meta.env.VITE_PACKAGE_ID || '0x6b30552018493c6daaef95c7a1956aca5adc1528513a7bc0d831cd9b136a8f90';
+      
+      // Frontend'de transaction'ı direkt oluştur
+      const tx = new Transaction();
+      
+      // messageId için placeholder - boş string'i ID'ye çeviriyoruz
+      const quorumValue = parseInt(quorumThreshold, 10);
+      const messageId = ''; // Backend'de de boş string kullanılıyor
+      
+      tx.moveCall({
+        target: `${packageId}::dao_app::create_proposal`,
+        arguments: [
+          tx.object(communityId),
+          tx.pure.id(messageId || '0x0'), // messageId - boş string için 0x0 fallback
+          tx.pure.string(title.trim()),
+          tx.pure.string(description.trim()),
+          tx.pure.u64(deadlineTimestamp),
+          tx.pure.u64(quorumValue),
+          tx.pure.bool(false), // is_join_request = false for regular proposals
+        ],
       });
 
-      if (!response.success || !response.data) {
-        throw new Error(response.error || 'Failed to create proposal transaction');
-      }
-
-      // Deserialize transaction
-      const { Transaction } = await import("@mysten/sui/transactions");
-      const base64String = response.data.transaction.transactionBlock;
-      const binaryString = atob(base64String);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const tx = Transaction.from(bytes);
-
-      signAndExecute(
-        {
-          transaction: tx,
-        },
-        {
-          onSuccess: () => {
-            onCreated();
-          },
-          onError: (error) => {
-            console.error('Proposal creation failed:', error);
-            setError('Öneri oluşturma başarısız: ' + (error.message || 'Bilinmeyen hata'));
-            setIsSubmitting(false);
-          },
-        }
-      );
+      await signAndExecute({
+        transaction: tx,
+      });
+      
+      onCreated();
+      setIsSubmitting(false);
     } catch (error) {
       console.error('Proposal creation error:', error);
       setError('Öneri oluşturma hatası: ' + (error instanceof Error ? error.message : 'Bilinmeyen hata'));
